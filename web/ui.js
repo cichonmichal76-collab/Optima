@@ -42,12 +42,11 @@ function bindEvents(state) {
 async function handleFileChange(event, state) {
   const file = event.target.files[0];
   if (!file) return;
-  const text = await file.text();
   state.fileName = file.name;
   $("#fileMeta").textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
 
   try {
-    const parsed = parseInputFile(file.name, text);
+    const parsed = await parseInputFile(file);
     state.headers = parsed.headers;
     state.rows = parsed.rows;
     state.format = parsed.format;
