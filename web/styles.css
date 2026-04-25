@@ -42,10 +42,11 @@ select {
 }
 
 .sidebar {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 18px;
   min-height: 100vh;
+  height: 100vh;
   min-width: 0;
   padding: 22px;
   background: linear-gradient(180deg, #16241f 0%, #152922 100%);
@@ -107,8 +108,10 @@ select {
 }
 
 .report-nav-section {
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  flex: 1 1 auto;
+  align-content: start;
+  overflow: hidden;
 }
 
 .side-heading {
@@ -202,9 +205,10 @@ input[type="date"] {
 
 .report-sidebar {
   display: grid;
+  align-content: start;
   gap: 14px;
   min-height: 0;
-  max-height: calc(100vh - 265px);
+  max-height: 100%;
   overflow: auto;
   padding-right: 4px;
 }
@@ -684,6 +688,7 @@ pre {
   }
 
   .sidebar {
+    height: auto;
     min-height: auto;
   }
 
