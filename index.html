@@ -13,11 +13,15 @@
         <span class="brand-mark">OS</span>
         <div>
           <h1>Optima SQL</h1>
-          <p>MVP lokalny</p>
+          <p>Centrum raportów zamknięcia miesiąca</p>
         </div>
       </div>
 
-      <section class="side-section">
+      <section class="side-section side-section-database">
+        <div class="side-heading">
+          <span class="eyebrow eyebrow-sidebar">Źródło danych</span>
+          <strong id="sidebarDatabaseName">Brak bazy</strong>
+        </div>
         <label for="backupDirectory">Wgraj plik</label>
         <input id="backupDirectory" type="text" value="F:\" placeholder="Wskaż katalog, np. F:\" aria-label="Katalog z backupem SQL">
         <input id="backupPath" type="hidden">
@@ -28,6 +32,13 @@
         <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
       </section>
 
+      <section class="side-section report-nav-section">
+        <div class="side-heading">
+          <span class="eyebrow eyebrow-sidebar">Hierarchia raportów</span>
+          <strong>Raporty i kontrole</strong>
+        </div>
+        <nav id="reportSidebar" class="report-sidebar" aria-label="Raporty tematyczne"></nav>
+      </section>
     </aside>
 
     <main class="workspace">
@@ -35,13 +46,14 @@
         <div class="topbar-db">
           <span class="eyebrow">Podłączona baza</span>
           <h2 id="connectedDatabaseName">Brak podłączonej bazy</h2>
-          <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz zakres danych.</p>
+          <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz raport, który ma odpowiedzieć, co blokuje zamknięcie miesiąca.</p>
           <div class="status-strip">
             <span id="recordBadge">Wiersze: 0</span>
+            <span id="selectedReportBadge">Raport: Status paczki danych</span>
           </div>
         </div>
 
-        <div class="time-filter-bar" aria-label="Filtry czasu">
+        <div class="time-filter-bar" aria-label="Filtry globalne raportów">
           <label>
             Rok
             <input id="filterYear" type="text" value="2026" inputmode="numeric" aria-label="Rok danych">
@@ -77,19 +89,62 @@
         </div>
       </header>
 
-      <section class="view is-active" id="view-database">
-        <div class="split-layout">
+      <section class="report-shell">
+        <section class="panel report-hero">
+          <div class="panel-head report-hero-head">
+            <div>
+              <span class="eyebrow" id="reportSection">Paczki i zamknięcie</span>
+              <h3 id="reportTitle">Status paczki danych</h3>
+              <p class="report-summary" id="reportSummary">Pierwszy raport po imporcie, który pokazuje kompletność paczki, liczbę dokumentów, błędy oraz gotowość do zamknięcia miesiąca.</p>
+            </div>
+            <div class="report-priority" id="reportPriority">Priorytet: krytyczny</div>
+          </div>
+          <div class="report-meta-grid">
+            <div class="report-meta-card">
+              <span class="meta-label">Pytanie biznesowe</span>
+              <strong id="reportQuestion">Czy paczka jest gotowa do pracy i co dokładnie blokuje zamknięcie miesiąca?</strong>
+            </div>
+            <div class="report-meta-card">
+              <span class="meta-label">Źródła danych</span>
+              <strong id="reportSources">Optima, KSeF, bank, OCR, Excel</strong>
+            </div>
+            <div class="report-meta-card">
+              <span class="meta-label">Filtry globalne</span>
+              <strong id="reportFilters">Okres, typ daty, źródło, dokument, kontrahent, status księgowy, status schematu, status KSeF</strong>
+            </div>
+          </div>
+          <div class="tag-row" id="reportTags"></div>
+        </section>
+
+        <section class="metrics-grid" id="reportMetrics"></section>
+
+        <div class="report-layout">
           <section class="panel">
             <div class="panel-head">
-              <h3>Podłączenie backupu SQL</h3>
-              <span class="muted">read-only</span>
+              <h3>Zakres kontroli</h3>
+              <span class="muted" id="reportScopeMeta">Kontrole kluczowe dla wybranego raportu</span>
             </div>
-            <p class="disclaimer">
-              Wskaż katalog z backupem .BAK/.BAC, kliknij „Wgraj plik”, a potem „Podłącz”.
-              Program odtworzy lokalną kopię read-only bez zapisu do Optimy.
-            </p>
-            <pre id="backupInfo">Status: oczekuję na wskazanie katalogu.</pre>
+            <div class="stack-list" id="reportControls"></div>
           </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Układ raportu</h3>
+              <span class="muted">Kolumny i sekcje</span>
+            </div>
+            <div class="stack-list" id="reportLayoutList"></div>
+          </section>
+        </div>
+
+        <div class="report-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Alerty i blokady</h3>
+              <span class="muted">Na co księgowa ma spojrzeć najpierw</span>
+            </div>
+            <div class="stack-list" id="reportAlerts"></div>
+          </section>
+
           <section class="panel">
             <div class="panel-head">
               <h3>Dane wykryte w bazie</h3>
@@ -101,40 +156,51 @@
           </section>
         </div>
 
-          <section class="panel preview-panel">
-            <div class="panel-head panel-head-preview">
-              <div>
-                <h3>Podgląd danych</h3>
-                <span class="muted" id="previewMeta">Brak danych</span>
-              </div>
-              <div class="preview-toolbar">
-                <label for="dataKind">Typ danych z SQL</label>
-                <select id="dataKind">
-                  <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
-                  <option value="VAT_SALE">Rejestr VAT sprzedaz</option>
-                  <option value="LEDGER">Zapisy ksiegowe</option>
-                  <option value="ACCOUNT_PLAN">Plan kont</option>
-                  <option value="SETTLEMENTS">Rozrachunki</option>
-                  <option value="BANK">Bank / kasa</option>
-                  <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
-                  <option value="CONTRACTORS">Kontrahenci</option>
-                  <option value="DOCUMENTS">Dokumenty i załączniki</option>
-                  <option value="FIXED_ASSETS">Środki trwałe</option>
-                  <option value="HR_PAYROLL">Kadry i płace</option>
-                </select>
-                <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
-              </div>
+        <section class="panel preview-panel">
+          <div class="panel-head panel-head-preview">
+            <div>
+              <h3>Zasilanie raportu z SQL</h3>
+              <span class="muted" id="previewMeta">Brak danych</span>
             </div>
-            <div class="inline-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
-            <div class="table-wrap compact">
-              <table>
-                <thead id="previewHead"></thead>
-                <tbody id="previewRows">
-                  <tr><td class="empty">Wybierz kafel z Dostępne dane albo kliknij Pobierz z SQL.</td></tr>
-                </tbody>
-              </table>
+            <div class="preview-toolbar">
+              <label for="dataKind">Typ danych z SQL</label>
+              <select id="dataKind">
+                <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
+                <option value="VAT_SALE">Rejestr VAT sprzedaż</option>
+                <option value="LEDGER">Zapisy księgowe</option>
+                <option value="ACCOUNT_PLAN">Plan kont</option>
+                <option value="SETTLEMENTS">Rozrachunki</option>
+                <option value="BANK">Bank / kasa</option>
+                <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
+                <option value="CONTRACTORS">Kontrahenci</option>
+                <option value="DOCUMENTS">Dokumenty i załączniki</option>
+                <option value="FIXED_ASSETS">Środki trwałe</option>
+                <option value="HR_PAYROLL">Kadry i płace</option>
+              </select>
+              <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
             </div>
-          </section>
+          </div>
+          <div class="inline-meta" id="sqlMeta">Wybierz raport lub kafel danych, a potem pobierz źródło główne z SQL.</div>
+          <div class="table-wrap compact">
+            <table>
+              <thead id="previewHead"></thead>
+              <tbody id="previewRows">
+                <tr><td class="empty">Wybierz raport w sidebarze albo kliknij kafel w sekcji Dane wykryte w bazie.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel operational-panel">
+          <div class="panel-head">
+            <h3>Status podłączenia backupu SQL</h3>
+            <span class="muted">read-only</span>
+          </div>
+          <p class="disclaimer">
+            Backup pozostaje operacją techniczną. Główna praca odbywa się na raportach, ale tutaj zawsze widać stan podłączenia bazy i ewentualny błąd odtworzenia.
+          </p>
+          <pre id="backupInfo">Status: oczekuję na wskazanie katalogu.</pre>
+        </section>
       </section>
     </main>
   </div>

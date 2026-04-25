@@ -5,6 +5,7 @@ export function createInitialState() {
     backups: [],
     availableData: [],
     currentModule: "",
+    currentReportKey: "package-status",
     format: "-",
     fileName: "",
   };
