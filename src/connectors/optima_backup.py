@@ -84,8 +84,7 @@ def restore_backup(
         raise ValueError("Nie udało się ustalić nazwy bazy roboczej.")
 
     config = SqlcmdConfig(server=server, database="master", sqlcmd_path=sqlcmd_path)
-    if _database_exists(target, config):
-        raise ValueError(f"Baza robocza '{target}' już istnieje. Podaj inną nazwę.")
+    target = _unique_database_name(target, config)
 
     data_path, log_path = _default_sql_data_paths(config)
     move_clauses = []
@@ -175,9 +174,22 @@ def _validate_backup_path(path: str) -> Path:
 
 
 def _database_exists(database: str, config: SqlcmdConfig) -> bool:
-    sql = f"SELECT name FROM sys.databases WHERE name = N'{_sql_literal(database)}';"
+    sql = f"SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = N'{_sql_literal(database)}';"
     _, rows = run_sqlcmd_table(sql, config)
-    return bool(rows)
+    return any(row.get("name") == database for row in rows)
+
+
+def _unique_database_name(target: str, config: SqlcmdConfig) -> str:
+    if not _database_exists(target, config):
+        return target
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = target[:96].rstrip("_")
+    for index in range(1, 100):
+        candidate = sanitize_identifier(f"{base}_{timestamp}_{index:02d}")
+        if not _database_exists(candidate, config):
+            return candidate
+    raise ValueError("Nie udało się dobrać wolnej nazwy bazy roboczej.")
 
 
 def _default_sql_data_paths(config: SqlcmdConfig) -> tuple[Path, Path]:

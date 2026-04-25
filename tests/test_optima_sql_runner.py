@@ -9,6 +9,12 @@ def test_clean_sqlcmd_tsv_removes_separator_lines():
     assert clean_sqlcmd_tsv(output) == ["A\tB", "1\t2"]
 
 
+def test_clean_sqlcmd_tsv_removes_rows_affected_messages():
+    output = "name\r\n----\r\n(0 rows affected)\r\n"
+
+    assert clean_sqlcmd_tsv(output) == ["name"]
+
+
 def test_decode_sqlcmd_bytes_handles_utf16_bom():
     payload = "Numer dokumentu\r\nFV/1\r\n".encode("utf-16")
 

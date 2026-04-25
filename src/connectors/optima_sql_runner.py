@@ -110,6 +110,8 @@ def clean_sqlcmd_tsv(output: str) -> list[str]:
     for line in lines:
         if not line.strip():
             continue
+        if line.strip().startswith("(") and line.strip().endswith("rows affected)"):
+            continue
         if set(line.replace("\t", "").strip()) <= {"-"}:
             continue
         cleaned.append(line)

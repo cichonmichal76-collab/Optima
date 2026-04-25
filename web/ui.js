@@ -124,6 +124,7 @@ function selectNewestBackup(backups) {
 
 async function connectBackup(state) {
   const path = $("#backupPath").value.trim();
+  const previousDatabase = $("#sqlDatabase").value.trim();
   if (!path) {
     $("#backupMeta").textContent = "Status: najpierw kliknij „Wgraj plik” i wybierz backup.";
     $("#backupInfo").textContent = "Status: brak wybranego pliku backupu.";
@@ -139,7 +140,6 @@ async function connectBackup(state) {
       server: $("#sqlServer").value.trim(),
       target_database: inspected.suggested_database || $("#sqlDatabase").value.trim(),
     };
-    $("#sqlDatabase").value = request.target_database;
     $("#backupMeta").textContent = "Status: podłączam bazę read-only. To może potrwać...";
     $("#backupInfo").textContent = `Status: odtwarzam kopię read-only.\nBaza: ${request.target_database}`;
     const response = await fetch("/api/connect-backup", {
@@ -157,6 +157,10 @@ async function connectBackup(state) {
     updateTimeFilterMeta();
     await loadAvailableData(state);
   } catch (error) {
+    $("#sqlDatabase").value = previousDatabase;
+    updateBadges(state);
+    updateSqlControls();
+    if (!previousDatabase) renderNoDatabase();
     $("#backupMeta").textContent = `Status: błąd podłączenia - ${error.message}`;
     $("#backupInfo").textContent = `Status: błąd - ${error.message}`;
   } finally {
@@ -182,9 +186,7 @@ async function inspectSelectedBackup(path) {
 
 async function loadAvailableData(state) {
   if (!$("#sqlDatabase").value.trim()) {
-    const message = '<div class="available-card is-empty">Najpierw podłącz bazę.</div>';
-    $("#availableDataList").innerHTML = message;
-    $("#databaseDataList").innerHTML = message;
+    renderNoDatabase();
     return;
   }
 
@@ -208,6 +210,12 @@ async function loadAvailableData(state) {
     $("#availableDataList").innerHTML = message;
     $("#databaseDataList").innerHTML = message;
   }
+}
+
+function renderNoDatabase() {
+  const message = '<div class="available-card is-empty">Najpierw podłącz bazę.</div>';
+  $("#availableDataList").innerHTML = message;
+  $("#databaseDataList").innerHTML = message;
 }
 
 function renderAvailableData(state) {

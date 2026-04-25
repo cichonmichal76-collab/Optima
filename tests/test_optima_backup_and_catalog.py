@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import src.connectors.optima_backup as optima_backup
 from src.connectors.optima_backup import sanitize_identifier, scan_backup_files, suggest_database_name
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 
@@ -14,6 +15,17 @@ def test_suggest_database_name_creates_safe_audit_name():
 
 def test_sanitize_identifier_rejects_sql_punctuation():
     assert sanitize_identifier("abc]; DROP DATABASE master;--") == "abc_DROP_DATABASE_master"
+
+
+def test_unique_database_name_adds_suffix_when_target_exists(monkeypatch):
+    existing = {"OptimaAudit_Test"}
+
+    def fake_database_exists(database, config):
+        return database in existing
+
+    monkeypatch.setattr(optima_backup, "_database_exists", fake_database_exists)
+
+    assert optima_backup._unique_database_name("OptimaAudit_Test", object()).startswith("OptimaAudit_Test_")
 
 
 def test_scan_backup_files_accepts_directory_root(tmp_path):
