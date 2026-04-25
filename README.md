@@ -32,6 +32,16 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## Uruchomienie web GUI na localhost
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+Adres: `http://127.0.0.1:8000/`
+
+Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
+
 ## Uruchomienie testow
 
 ```powershell
@@ -71,4 +81,3 @@ tests/
 - GUI jest lekkim MVP i daje miejsce na dalsze dopracowanie ergonomii.
 - Konektory `TXT/COMMA` i `MT940` sa przygotowane architektonicznie, ale oznaczone jako eksperymentalne.
 - Generator schematow tworzy projekt i raport walidacyjny, a nie gotowy XML importowy do Optimy.
-
