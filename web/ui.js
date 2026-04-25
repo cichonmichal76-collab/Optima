@@ -938,6 +938,7 @@ function bindEvents(state) {
   });
   $("#dataKind").addEventListener("change", () => updateSqlControls(state));
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
+  $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
   ["#filterYear", "#filterMonth", "#filterDateFrom", "#filterDateTo"].forEach((selector) => {
     $(selector).addEventListener("change", updateTimeFilterMeta);
     $(selector).addEventListener("input", updateTimeFilterMeta);
@@ -1239,6 +1240,14 @@ async function applyTimeFilter(state) {
   if (state.currentModule) {
     await loadModuleData(state, state.currentModule);
   }
+}
+
+async function clearTimeFilters(state) {
+  $("#filterYear").value = "";
+  $("#filterMonth").value = "";
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  await applyTimeFilter(state);
 }
 
 function getTimeFilterPayload() {
