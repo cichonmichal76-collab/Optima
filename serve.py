@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 from email import policy
 from email.parser import BytesParser
 from http import HTTPStatus
@@ -19,6 +20,7 @@ from src.connectors.optima_report_queries import build_report_query
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
 from src.core.enums import DataKind
+from src.export.report_sql import export_sql_report_pdf, export_sql_report_xlsx
 
 
 HOST = "127.0.0.1"
@@ -50,6 +52,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/report-data":
             self._handle_report_data()
+            return
+        if self.path == "/api/report-export":
+            self._handle_report_export()
             return
         if self.path == "/api/backup-info":
             self._handle_backup_info()
@@ -135,6 +140,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             response = report_data(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_report_export(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = export_report(payload)
             self._send_json(response)
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -325,6 +338,8 @@ def available_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 def report_data(payload: dict[str, Any]) -> dict[str, Any]:
     report_key = str(payload.get("report") or payload.get("report_key") or "").strip()
+    module_code = str(payload.get("module") or "").strip()
+    report_title = str(payload.get("report_title") or report_key or "Raport SQL").strip()
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
     period = payload.get("period")
@@ -333,8 +348,22 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
     date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
 
-    query = build_report_query(report_key, period, year=year, date_from=date_from, date_to=date_to)
-    headers, rows = run_sqlcmd_table(query.sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
+    try:
+        query = build_report_query(report_key, period, year=year, date_from=date_from, date_to=date_to)
+        sql = query.sql
+        notes = query.notes
+        source_type = "report"
+    except ValueError:
+        if not module_code:
+            raise
+        sql, module_notes = build_module_query(module_code, period, year=year, date_from=date_from, date_to=date_to)
+        notes = (
+            f"Raport „{report_title}” korzysta z aktywnego źródła SQL modułu {module_code}.",
+            *module_notes,
+        )
+        source_type = "module"
+
+    headers, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
     if len(rows) > MAX_SQL_ROWS:
         rows = rows[:MAX_SQL_ROWS]
 
@@ -342,16 +371,70 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
         "format": "SQL",
         "headers": headers,
         "rows": rows,
-        "notes": [f"Źródło SQL: {server} / {database}", *query.notes],
+        "notes": [f"Źródło SQL: {server} / {database}", *notes],
         "source": {
             "server": server,
             "database": database,
             "report": report_key,
+            "module": module_code,
+            "source_type": source_type,
             "period": period,
             "year": year,
             "date_from": date_from,
             "date_to": date_to,
         },
+    }
+
+
+def export_report(payload: dict[str, Any]) -> dict[str, Any]:
+    export_format = str(payload.get("format") or "xlsx").strip().lower()
+    include_chart = bool(payload.get("include_chart"))
+    title = str(payload.get("title") or payload.get("report_title") or "Raport SQL").strip()
+    filter_label = str(payload.get("filter_label") or payload.get("time_filter") or "").strip()
+    headers = [str(header) for header in payload.get("headers") or []]
+    rows = [
+        {str(key): value for key, value in row.items()}
+        for row in payload.get("rows") or []
+        if isinstance(row, dict)
+    ]
+    notes = [str(note) for note in payload.get("notes") or []]
+
+    exports_dir = ROOT / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+    base_name = _slugify(title) or "raport-sql"
+    suffix = ".pdf" if export_format == "pdf" else ".xlsx"
+    mode_name = "wykres" if include_chart else "tabela"
+    file_path = exports_dir / f"{base_name}_{mode_name}_{timestamp}{suffix}"
+
+    if export_format == "xlsx":
+        export_sql_report_xlsx(
+            file_path,
+            title=title,
+            headers=headers,
+            rows=rows,
+            notes=notes,
+            filter_label=filter_label,
+            include_chart=include_chart,
+        )
+    elif export_format == "pdf":
+        export_sql_report_pdf(
+            file_path,
+            title=title,
+            headers=headers,
+            rows=rows,
+            notes=notes,
+            filter_label=filter_label,
+            include_chart=include_chart,
+        )
+    else:
+        raise ValueError("Eksport raportu obsługuje tylko formaty XLSX i PDF.")
+
+    return {
+        "format": export_format,
+        "include_chart": include_chart,
+        "file_name": file_path.name,
+        "download_url": f"/exports/{file_path.name}",
     }
 
 
@@ -411,6 +494,10 @@ def normalize_cell(value: Any) -> str:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "-", value.strip()).strip("-").lower()[:80]
 
 
 def main() -> int:
