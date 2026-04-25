@@ -74,12 +74,6 @@
         <div class="file-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
       </section>
 
-      <section class="side-section">
-        <label for="fileInput">Plik awaryjnie</label>
-        <input id="fileInput" type="file" accept=".xlsx,.xls,.csv,.txt,.json,.xml">
-        <div class="file-meta" id="fileMeta">Brak pliku</div>
-      </section>
-
       <div class="side-actions">
         <button id="runAudit" class="primary-button">Uruchom audyt</button>
         <button id="clearData" class="plain-button">Wyczysc</button>
@@ -174,7 +168,7 @@
               <table>
                 <thead id="previewHead"></thead>
                 <tbody id="previewRows">
-                  <tr><td class="empty">Wczytaj plik XLSX, CSV, JSON lub XML.</td></tr>
+                  <tr><td class="empty">Wybierz kafel z Dostępne dane albo kliknij Pobierz z SQL.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -186,7 +180,7 @@
               <span class="muted" id="mappingCompleteness">0 / 0</span>
             </div>
             <div id="mappingStatus" class="mapping-status is-idle" aria-live="polite">
-              Mapowanie oczekuje na plik.
+              Mapowanie oczekuje na dane z SQL.
             </div>
             <div id="mappingFields" class="mapping-list"></div>
           </section>

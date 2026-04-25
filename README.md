@@ -41,13 +41,13 @@ python -m http.server 8000 --bind 127.0.0.1
 
 Adres: `http://127.0.0.1:8000/`
 
-Lepszy wariant, z obsluga podgladu legacy XLS przez lokalny backend Python:
+Wariant web z lokalnym backendem Python i polaczeniem do SQL:
 
 ```powershell
 python serve.py
 ```
 
-Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu XLSX/XLS/CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
+Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu danych z odtworzonej kopii bazy Comarch ERP Optima. Reczny import plikow w panelu web jest wylaczony: praca startuje od wskazania lokalnego backupu `.BAK`/`.BAC` albo od wybrania gotowej bazy roboczej SQL.
 
 Po uruchomieniu przez `python serve.py` panel web prowadzi prace od bazy SQL: wskazujesz lokalny plik `.BAK`/`.BAC`, program sprawdza backup, odtwarza go do bazy roboczej read-only, a nastepnie pokazuje kafel `Dostepne dane` w sidebarze. Obslugiwane pewne moduly do pobrania: rejestry VAT, dekrety, plan kont, rozrachunki, bank/kasa, JPK/deklaracje, kontrahenci, dokumenty, srodki trwale oraz kadry/place.
 
@@ -62,7 +62,7 @@ python tools/export_optima_sql.py --kind LEDGER --period 202603 --output exports
 python tools/export_optima_sql.py --kind ACCOUNT_PLAN --output exports/plan_kont.tsv
 ```
 
-Pliki TSV mozna wczytac w web GUI tak samo jak CSV. Naglowki sa po polsku i mapuja sie na pola aplikacji.
+Pliki TSV z narzedzia CLI sa przeznaczone do kontroli technicznej poza web GUI. Panel web pobiera dane bezposrednio z SQL, z polskimi naglowkami mapowanymi na pola aplikacji.
 
 ## Uruchomienie testow
 
@@ -72,12 +72,12 @@ pytest
 
 ## Przykladowy przeplyw pracy
 
-1. Uzytkownik wybiera typ danych w kreatorze importu.
-2. Program rozpoznaje format i pokazuje podglad pierwszych wierszy lub struktury XML.
-3. Uzytkownik akceptuje lub poprawia mapowanie kolumn.
-4. Silnik audytu generuje liste bledow i ostrzezen.
-5. Wyniki sa eksportowane do `JSON`, `HTML` lub `XLSX`.
-6. Wszystkie raporty zawieraja informacje, ze wynik wymaga weryfikacji przez osobe odpowiedzialna za ksiegowosc.
+1. Uzytkownik wskazuje lokalny backup `.BAK`/`.BAC` albo gotowa baze robocza SQL.
+2. Program sprawdza backup, odtwarza kopie read-only i pokazuje kafel `Dostepne dane`.
+3. Uzytkownik wybiera pewny modul danych, np. VAT, dekrety, kontrahentow albo rozrachunki.
+4. Program pobiera dane z SQL, pokazuje podglad i status mapowania: sukces albo niepowodzenie.
+5. Silnik audytu generuje liste bledow i ostrzezen.
+6. Wyniki sa eksportowane do `JSON`, `HTML` lub `XLSX`.
 
 ## Bezpieczenstwo MVP
 

@@ -1,7 +1,6 @@
 import { ALIASES, FIELD_HELP_TEXTS, FIELD_LABELS, FIELDS_BY_KIND, REQUIRED_BY_KIND, VIEW_TITLES } from "./config.js";
 import { buildSummary, runAudit } from "./audit.js";
 import { exportExcel, exportHtml, exportJson } from "./exporters.js";
-import { parseInputFile } from "./parsers.js";
 import { generateSchemaDraft } from "./schema.js";
 import { $, $$, escapeHtml, normalizeHeader } from "./utils.js";
 
@@ -32,7 +31,6 @@ export function initApp(state) {
 }
 
 function bindEvents(state) {
-  $("#fileInput").addEventListener("change", (event) => handleFileChange(event, state));
   $("#loadSql").addEventListener("click", () => loadSqlData(state));
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
   $("#backupSelect").addEventListener("change", () => {
@@ -65,29 +63,6 @@ function bindEvents(state) {
   $("#exportHtml").addEventListener("click", () => exportHtml(state.issues));
   $("#exportExcel").addEventListener("click", () => exportExcel($("#issueRows").closest("table").outerHTML));
   $$(".nav-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
-}
-
-async function handleFileChange(event, state) {
-  const file = event.target.files[0];
-  if (!file) return;
-  state.fileName = file.name;
-  $("#fileMeta").textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
-
-  try {
-    const parsed = await parseInputFile(file);
-    state.headers = parsed.headers;
-    state.rows = parsed.rows;
-    state.format = parsed.format;
-    state.issues = [];
-    autoMap(state);
-    renderPreview(state);
-    updateSummary(buildSummary([], []));
-    renderIssues(state);
-    updateReport(state);
-    switchView("mapping");
-  } catch (error) {
-    $("#fileMeta").textContent = `Blad: ${error.message}`;
-  }
 }
 
 async function loadSqlData(state) {
@@ -128,8 +103,6 @@ async function loadModuleData(state, kind) {
     state.fileName = `${request.database}:${kind}${request.period ? `:${request.period}` : ""}`;
     state.issues = [];
     if ($(`#dataKind option[value="${kind}"]`)) $("#dataKind").value = kind;
-    $("#fileInput").value = "";
-    $("#fileMeta").textContent = "Źródło: SQL";
     $("#sqlMeta").textContent = `SQL OK: ${state.rows.length} wierszy. ${(payload.notes || [])[0] || ""}`;
     autoMap(state);
     renderPreview(state);
@@ -438,7 +411,7 @@ function updateMappingStatus(state, missingFields) {
   status.classList.remove("is-idle", "is-success", "is-fail");
   if (!state.headers.length) {
     status.classList.add("is-idle");
-    status.textContent = "Mapowanie oczekuje na plik.";
+    status.textContent = "Mapowanie oczekuje na dane z SQL.";
     return;
   }
 
@@ -478,8 +451,6 @@ function reset(state) {
   state.mapping = {};
   state.format = "-";
   state.fileName = "";
-  $("#fileInput").value = "";
-  $("#fileMeta").textContent = "Brak pliku";
   updateSqlControls();
   renderPreview(state);
   renderMapping(state);
