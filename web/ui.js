@@ -902,7 +902,7 @@ const REPORTS = REPORT_GROUPS.flatMap((group) =>
 
 const REPORTS_BY_KEY = Object.fromEntries(REPORTS.map((report) => [report.key, report]));
 const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [group.id, group]));
-const SIDEBAR_GROUP_IDS = ["dashboards", "packages", "schemes"];
+const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 
 export function initApp(state) {
@@ -954,6 +954,16 @@ function bindEvents(state) {
 }
 
 function selectView(state, viewKey) {
+  if (viewKey === "report") {
+    state.currentView = "report";
+    renderSideMenu(state);
+    renderCurrentView(state);
+    renderActiveReport(state);
+    updateBadges(state);
+    loadActiveReportData(state);
+    return;
+  }
+
   state.currentView = viewKey === "communication" ? "communication" : "start";
   renderSideMenu(state);
   renderCurrentView(state);
@@ -1325,6 +1335,7 @@ function renderSideMenu(state) {
   $("#sideMenu").innerHTML = [
     sideViewItem("start", "START", "Strona startowa", state),
     sideViewItem("communication", "Komunikacja", "Podłączanie bazy i wykryte dane", state),
+    sideViewItem("report", "Raport", "Aktywny raport i wyniki SQL", state),
     ...SIDEBAR_GROUP_IDS.map((groupId) => sideReportGroup(REPORT_GROUPS_BY_ID[groupId], state)),
   ].join("");
 }

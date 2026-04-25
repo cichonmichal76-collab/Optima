@@ -298,6 +298,10 @@ input[type="date"] {
   gap: 6px;
 }
 
+.side-menu-group:not(.is-active) .side-submenu {
+  display: none;
+}
+
 .side-child-item {
   display: grid;
   gap: 3px;
