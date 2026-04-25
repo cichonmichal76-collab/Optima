@@ -1220,7 +1220,7 @@ function defaultYearFromDatabase(years) {
 }
 
 function defaultMonthValue() {
-  return "03";
+  return "";
 }
 
 async function loadActiveReportData(state) {
