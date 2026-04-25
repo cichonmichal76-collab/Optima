@@ -8,7 +8,7 @@ export async function parseInputFile(file) {
     return { format: "XLSX", ...(await parseXlsx(await file.arrayBuffer())) };
   }
   if (lowerName.endsWith(".xls")) {
-    throw new Error("Stary format XLS nie jest obsługiwany w web GUI. Zapisz plik jako XLSX albo użyj aplikacji Python.");
+    return parseLegacySpreadsheet(file);
   }
 
   const text = await file.text();
@@ -25,6 +25,22 @@ export async function parseInputFile(file) {
     return { format: "XML", ...parseXml(text) };
   }
   return { format: "CSV", ...parseCsv(text) };
+}
+
+async function parseLegacySpreadsheet(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch("/api/preview", { method: "POST", body: formData });
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error("Lokalny serwer nie zwrócił poprawnej odpowiedzi dla pliku XLS.");
+  }
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error || "Nie udało się wczytać pliku XLS przez lokalny serwer.");
+  }
+  return payload;
 }
 
 export async function parseXlsx(arrayBuffer) {

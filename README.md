@@ -40,7 +40,13 @@ python -m http.server 8000 --bind 127.0.0.1
 
 Adres: `http://127.0.0.1:8000/`
 
-Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
+Lepszy wariant, z obsluga podgladu legacy XLS przez lokalny backend Python:
+
+```powershell
+python serve.py
+```
+
+Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu XLSX/XLS/CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
 
 ## Uruchomienie testow
 
