@@ -3,27 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Optima Audit GUI</title>
+  <title>Optima SQL GUI</title>
   <link rel="stylesheet" href="web/styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">OA</span>
+        <span class="brand-mark">OS</span>
         <div>
-          <h1>Optima Audit</h1>
+          <h1>Optima SQL</h1>
           <p>MVP lokalny</p>
         </div>
       </div>
-
-      <nav class="nav-tabs" aria-label="Widoki aplikacji">
-        <button class="nav-tab is-active" data-view="database">Baza</button>
-        <button class="nav-tab" data-view="audit">Audyt</button>
-        <button class="nav-tab" data-view="mapping">Mapowanie</button>
-        <button class="nav-tab" data-view="schema">Schemat</button>
-        <button class="nav-tab" data-view="report">Raport</button>
-      </nav>
 
       <section class="side-section">
         <label>Baza SQL .BAK/.BAC</label>
@@ -53,7 +45,7 @@
       </section>
 
       <section class="side-section">
-        <label for="dataKind">Typ danych do ręcznego pobrania</label>
+        <label for="dataKind">Typ danych z SQL</label>
         <select id="dataKind">
           <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
           <option value="VAT_SALE">Rejestr VAT sprzedaz</option>
@@ -73,11 +65,6 @@
         <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
         <div class="file-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
       </section>
-
-      <div class="side-actions">
-        <button id="runAudit" class="primary-button">Uruchom audyt</button>
-        <button id="clearData" class="plain-button">Wyczysc</button>
-      </div>
     </aside>
 
     <main class="workspace">
@@ -87,8 +74,7 @@
           <p id="viewSubtitle">Podłączenie lokalnej kopii Optimy z pliku BAK/BAC.</p>
         </div>
         <div class="status-strip">
-          <span id="formatBadge">Format: -</span>
-          <span id="mappingBadge">Mapowanie: -</span>
+          <span id="databaseBadge">Baza: -</span>
           <span id="recordBadge">Wiersze: 0</span>
         </div>
       </header>
@@ -116,53 +102,11 @@
             </div>
           </section>
         </div>
-      </section>
 
-      <section class="view" id="view-audit">
-        <div class="metrics-grid">
-          <div class="metric critical"><span>Critical</span><strong id="criticalCount">0</strong></div>
-          <div class="metric warning"><span>Warning</span><strong id="warningCount">0</strong></div>
-          <div class="metric info"><span>Info</span><strong id="infoCount">0</strong></div>
-          <div class="metric"><span>Dokumenty</span><strong id="documentCount">0</strong></div>
-          <div class="metric"><span>Kontrahenci</span><strong id="contractorCount">0</strong></div>
-          <div class="metric"><span>Brutto</span><strong id="grossTotal">0.00</strong></div>
-        </div>
-
-        <div class="toolbar">
-          <select id="levelFilter" aria-label="Filtr poziomu">
-            <option value="">Wszystkie poziomy</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="WARNING">Warning</option>
-            <option value="INFO">Info</option>
-          </select>
-          <input id="searchFilter" type="search" placeholder="Dokument, kontrahent, problem">
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Poziom</th>
-                <th>Obszar</th>
-                <th>Dokument</th>
-                <th>Kontrahent</th>
-                <th>Problem</th>
-                <th>Rekomendacja</th>
-              </tr>
-            </thead>
-            <tbody id="issueRows">
-              <tr><td colspan="6" class="empty">Brak wynikow audytu.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="view" id="view-mapping">
-        <div class="split-layout">
           <section class="panel">
             <div class="panel-head">
-              <h3>Podglad danych</h3>
-              <button id="autoMap" class="plain-button">Automapuj</button>
+              <h3>Podgląd danych</h3>
+              <span class="muted" id="previewMeta">Brak danych</span>
             </div>
             <div class="table-wrap compact">
               <table>
@@ -173,54 +117,6 @@
               </table>
             </div>
           </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <h3>Pola aplikacji</h3>
-              <span class="muted" id="mappingCompleteness">0 / 0</span>
-            </div>
-            <div id="mappingStatus" class="mapping-status is-idle" aria-live="polite">
-              Mapowanie oczekuje na dane z SQL.
-            </div>
-            <div id="mappingFields" class="mapping-list"></div>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" id="view-schema">
-        <div class="schema-layout">
-          <section class="panel">
-            <h3>Generator projektu schematu</h3>
-            <label for="schemaTemplate">Wzorzec</label>
-            <select id="schemaTemplate">
-              <option value="FZ_VAT_100">FZ koszt VAT 100%</option>
-              <option value="FZ_PALIWO_50">FZ paliwo VAT 50%</option>
-              <option value="FZ_BEZ_VAT">FZ bez VAT</option>
-              <option value="FS_23">FS sprzedaz krajowa 23%</option>
-              <option value="WB_BANK_FEE">WB oplata bankowa</option>
-              <option value="AMORT">AMORT</option>
-              <option value="LP">LP lista plac</option>
-            </select>
-            <button id="generateSchema" class="primary-button">Generuj</button>
-          </section>
-          <section class="panel">
-            <h3>Projekt</h3>
-            <pre id="schemaOutput">Wybierz wzorzec i wygeneruj projekt.</pre>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" id="view-report">
-        <div class="export-row">
-          <button id="exportJson" class="primary-button">Eksport JSON</button>
-          <button id="exportHtml" class="plain-button">Eksport HTML</button>
-          <button id="exportExcel" class="plain-button">Eksport XLS</button>
-        </div>
-        <section class="panel report-panel">
-          <h3>Podsumowanie raportu</h3>
-          <p class="disclaimer">Wyniki wymagaja weryfikacji przez osobe odpowiedzialna za ksiegowosc.</p>
-          <pre id="reportPreview">{}</pre>
-        </section>
       </section>
     </main>
   </div>
