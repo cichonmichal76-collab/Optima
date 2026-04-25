@@ -1,6 +1,6 @@
 # Optima Audit GUI MVP
 
-Desktopowa aplikacja offline w Pythonie do audytu danych eksportowanych z Comarch ERP Optima oraz do przygotowywania projektow schematow ksiegowych. Projekt jest przygotowany jako bezpieczny MVP: bez Internetu, bez SQL, bez COM i bez zapisu do Optimy.
+Desktopowa aplikacja offline w Pythonie do audytu danych eksportowanych z Comarch ERP Optima oraz do przygotowywania projektow schematow ksiegowych. Projekt jest przygotowany jako bezpieczny MVP: bez Internetu, bez COM i bez zapisu do Optimy. Opcjonalny eksport SQL dziala tylko read-only na odtworzonej kopii bazy.
 
 ## Co juz jest w repo
 
@@ -10,6 +10,7 @@ Desktopowa aplikacja offline w Pythonie do audytu danych eksportowanych z Comarc
 - kreator mapowania kolumn z auto-detekcja typowych pol Optimy,
 - reguly audytu VAT, ksiegowan, planu kont, rozrachunkow, banku i schematow,
 - eksport raportow do `XLSX`, `HTML` i `JSON`,
+- jawne mapowania SQL dla odtworzonej bazy Optima: rejestry VAT, dekrety ksiegowe i plan kont,
 - lokalny store ustawien i profili mapowania w JSON i SQLite,
 - lekkie GUI PySide6 z ekranem glownym, importem, mapowaniem, dashboardem, raportem i kreatorem schematow,
 - testy `pytest` dla najwazniejszych scenariuszy MVP.
@@ -48,6 +49,19 @@ python serve.py
 
 Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu XLSX/XLS/CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
 
+## Eksport z odtworzonej bazy SQL Optima
+
+Eksport SQL jest read-only i korzysta z `sqlcmd`. Przyklad dla odtworzonej bazy firmowej na lokalnej instancji:
+
+```powershell
+python tools/export_optima_sql.py --kind VAT_PURCHASE --period 202603 --output exports/vat_zakup_202603.tsv
+python tools/export_optima_sql.py --kind VAT_SALE --period 202603 --output exports/vat_sprzedaz_202603.tsv
+python tools/export_optima_sql.py --kind LEDGER --period 202603 --output exports/dekrety_202603.tsv
+python tools/export_optima_sql.py --kind ACCOUNT_PLAN --output exports/plan_kont.tsv
+```
+
+Pliki TSV mozna wczytac w web GUI tak samo jak CSV. Naglowki sa po polsku i mapuja sie na pola aplikacji.
+
 ## Uruchomienie testow
 
 ```powershell
@@ -66,7 +80,7 @@ pytest
 ## Bezpieczenstwo MVP
 
 - brak polaczen HTTP,
-- brak SQL do Optimy,
+- brak zapisu SQL do Optimy,
 - brak COM do Optimy,
 - brak automatycznego importu do Optimy,
 - brak automatycznej korekty danych,
