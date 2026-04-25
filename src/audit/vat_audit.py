@@ -56,17 +56,7 @@ class VatAudit:
                         confidence=0.85,
                     )
                 )
-            if not record.vat_rate:
-                issues.append(
-                    self._issue(
-                        "WARNING",
-                        record,
-                        "VAT_RATE_MISSING",
-                        "Brak stawki VAT.",
-                        "Uzupelnij stawke VAT lub zmapuj odpowiednia kolumne.",
-                    )
-                )
-            elif record.vat_rate.lower().replace(" ", "") not in self.allowed_rates:
+            if record.vat_rate and record.vat_rate.lower().replace(" ", "") not in self.allowed_rates:
                 issues.append(
                     self._issue(
                         "WARNING",

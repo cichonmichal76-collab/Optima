@@ -29,6 +29,14 @@ def test_vat_audit_accepts_correct_document():
     assert issues == []
 
 
+def test_vat_audit_accepts_missing_vat_rate():
+    audit = VatAudit()
+
+    issues = audit.run([build_vat_record(vat_rate=None)])
+
+    assert issues == []
+
+
 def test_vat_audit_detects_mismatch_duplicate_and_missing_nip():
     audit = VatAudit()
     records = [
@@ -42,4 +50,3 @@ def test_vat_audit_detects_mismatch_duplicate_and_missing_nip():
     assert "VAT_SUM_MISMATCH" in codes
     assert "VAT_DUPLICATE" in codes
     assert "VAT_MISSING_CONTRACTOR" in codes
-

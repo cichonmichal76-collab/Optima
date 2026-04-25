@@ -79,9 +79,7 @@ function auditVat(rows, mapping) {
     if (!record.contractor || !record.nip) {
       issues.push({ level: "WARNING", ...base, issue: "Brak kontrahenta lub NIP.", recommendation: "Zweryfikuj dane kontrahenta." });
     }
-    if (!record.vatRate) {
-      issues.push({ level: "WARNING", ...base, issue: "Brak stawki VAT.", recommendation: "Zmapuj stawke VAT lub uzupelnij eksport." });
-    } else if (!VAT_RATES.has(String(record.vatRate).toLowerCase().replace(/\s/g, ""))) {
+    if (record.vatRate && !VAT_RATES.has(String(record.vatRate).toLowerCase().replace(/\s/g, ""))) {
       issues.push({ level: "WARNING", ...base, issue: `Nietypowa stawka VAT: ${record.vatRate}.`, recommendation: "Sprawdz konfiguracje stawek." });
     }
     if (record.vat < 0 && !String(record.document).toLowerCase().includes("kor")) {
