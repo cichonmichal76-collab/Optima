@@ -74,6 +74,15 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
                 self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
+        if parsed.path == "/api/years":
+            query = parse_qs(parsed.query)
+            server = (query.get("server") or [r".\SQLEXPRESS02"])[0]
+            database = (query.get("database") or [""])[0]
+            try:
+                self._send_json({"years": list_available_years(server, database)})
+            except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
         super().do_GET()
 
     def end_headers(self) -> None:
@@ -365,6 +374,35 @@ ORDER BY create_date DESC, name DESC;
         for row in rows
         if row.get("Baza")
     ]
+
+
+def list_available_years(server: str, database: str, sqlcmd_path: str | None = None) -> list[int]:
+    if not database:
+        return []
+
+    sql = """
+SET NOCOUNT ON;
+SELECT DISTINCT Rok
+FROM (
+    SELECT VaN_DeklRokMies / 100 AS Rok FROM CDN.VatNag WHERE VaN_DeklRokMies > 0
+    UNION ALL SELECT YEAR(DeN_DataDok) FROM CDN.DekretyNag WHERE DeN_DataDok IS NOT NULL
+    UNION ALL SELECT YEAR(KRo_DataDokumentu) FROM CDN.KsiRozrachunki WHERE KRo_DataDokumentu IS NOT NULL
+    UNION ALL SELECT YEAR(BZp_DataDok) FROM CDN.BnkZapisy WHERE BZp_DataDok IS NOT NULL
+    UNION ALL SELECT YEAR(DataOd) FROM CDN.JpkNag WHERE DataOd IS NOT NULL
+    UNION ALL SELECT YEAR(DoN_DataDok) FROM CDN.DokNag WHERE DoN_DataDok IS NOT NULL
+    UNION ALL SELECT YEAR(SrT_DataZak) FROM CDN.Trwale WHERE SrT_DataZak IS NOT NULL
+) AS Years
+WHERE Rok BETWEEN 2000 AND 2100
+ORDER BY Rok DESC;
+"""
+    _, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
+    years: list[int] = []
+    for row in rows:
+        try:
+            years.append(int(row.get("Rok", "")))
+        except ValueError:
+            continue
+    return years
 
 
 def normalize_cell(value: Any) -> str:

@@ -9,6 +9,7 @@ export function createInitialState() {
     reportDataError: "",
     backups: [],
     availableData: [],
+    availableYears: [],
     currentModule: "",
     currentView: "start",
     currentReportKey: "package-status",

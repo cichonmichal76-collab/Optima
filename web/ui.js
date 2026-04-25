@@ -924,6 +924,7 @@ function bindEvents(state) {
   $("#sqlDatabase").addEventListener("change", () => {
     persistDatabase($("#sqlDatabase").value.trim());
     updateBadges(state);
+    loadAvailableYears(state);
     loadAvailableData(state);
     renderActiveReport(state);
     loadActiveReportData(state);
@@ -998,6 +999,7 @@ async function ensureDatabaseAvailable(state) {
   $("#backupMeta").textContent = `Status: używam bazy ${detectedDatabase}.`;
   $("#backupInfo").textContent = `Status: aktywna baza SQL.\nBaza: ${detectedDatabase}`;
   updateBadges(state);
+  await loadAvailableYears(state);
   await loadAvailableData(state);
   return true;
 }
@@ -1097,6 +1099,7 @@ async function connectBackup(state) {
     $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
     updateBadges(state);
     updateTimeFilterMeta();
+    await loadAvailableYears(state);
     await loadAvailableData(state);
     await loadActiveReportData(state);
   } catch (error) {
@@ -1157,6 +1160,55 @@ async function loadAvailableData(state) {
     $("#databaseDataList").innerHTML = message;
     renderActiveReport(state);
   }
+}
+
+async function loadAvailableYears(state) {
+  const database = $("#sqlDatabase").value.trim();
+  if (!database) {
+    state.availableYears = [];
+    renderYearOptions(state, "");
+    return;
+  }
+
+  const currentYear = $("#filterYear").value.trim();
+  try {
+    const query = new URLSearchParams({
+      server: $("#sqlServer").value.trim(),
+      database,
+    });
+    const response = await fetch(`/api/years?${query.toString()}`);
+    const payload = await response.json();
+    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się pobrać lat z bazy.");
+
+    state.availableYears = (payload.years || []).map((year) => String(year));
+    const selectedYear = state.availableYears.includes(currentYear)
+      ? currentYear
+      : defaultYearFromDatabase(state.availableYears);
+    renderYearOptions(state, selectedYear);
+    updateTimeFilterMeta();
+  } catch (_error) {
+    state.availableYears = [];
+    renderYearOptions(state, currentYear);
+  }
+}
+
+function renderYearOptions(state, selectedYear) {
+  const years = state.availableYears || [];
+  const fallback = selectedYear && !years.includes(selectedYear) ? [selectedYear] : [];
+  const options = ["", ...fallback, ...years];
+  $("#filterYear").innerHTML = options.map((year) => {
+    const label = year ? year : "Wszystkie lata";
+    const selected = year === selectedYear ? " selected" : "";
+    return `<option value="${escapeHtml(year)}"${selected}>${escapeHtml(label)}</option>`;
+  }).join("");
+}
+
+function defaultYearFromDatabase(years) {
+  const currentYear = String(new Date().getFullYear());
+  if (years.includes(currentYear)) return currentYear;
+
+  const currentYearNumber = Number(currentYear);
+  return years.find((year) => Number(year) <= currentYearNumber) || years[0] || "";
 }
 
 async function loadActiveReportData(state) {

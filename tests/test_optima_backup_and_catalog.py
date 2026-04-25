@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import src.connectors.optima_backup as optima_backup
+import serve
 from src.connectors.optima_backup import sanitize_identifier, scan_backup_files, suggest_database_name
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 
@@ -76,3 +77,14 @@ def test_bank_module_query_filters_by_custom_date_range():
 
     assert "BZp_DataDok >= '2026-03-10'" in sql
     assert "BZp_DataDok < '2026-03-21'" in sql
+
+
+def test_list_available_years_reads_distinct_years(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "CDN.VatNag" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Rok"], [{"Rok": "2026"}, {"Rok": "bad"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    assert serve.list_available_years(r".\SQLEXPRESS02", "OptimaAudit_Test") == [2026]
