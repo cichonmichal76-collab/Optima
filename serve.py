@@ -243,9 +243,12 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
     period = payload.get("period")
+    year = payload.get("year")
+    date_from = str(payload.get("date_from") or "").strip() or None
+    date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
 
-    sql, notes = build_module_query(module_code, period)
+    sql, notes = build_module_query(module_code, period, year=year, date_from=date_from, date_to=date_to)
     headers, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
     if len(rows) > MAX_SQL_ROWS:
         notes = (*notes, f"Wczytano pierwsze {MAX_SQL_ROWS} wierszy z {len(rows)}.")
@@ -261,6 +264,9 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "database": database,
             "module": module_code,
             "period": period,
+            "year": year,
+            "date_from": date_from,
+            "date_to": date_to,
         },
     }
 
@@ -268,14 +274,22 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
 def available_data(payload: dict[str, Any]) -> dict[str, Any]:
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    period = payload.get("period")
+    year = payload.get("year")
+    date_from = str(payload.get("date_from") or "").strip() or None
+    date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
     _, rows = run_sqlcmd_table(
-        build_available_data_sql(),
+        build_available_data_sql(period, year=year, date_from=date_from, date_to=date_to),
         SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path),
     )
     return {
         "server": server,
         "database": database,
+        "period": period,
+        "year": year,
+        "date_from": date_from,
+        "date_to": date_to,
         "modules": rows,
     }
 

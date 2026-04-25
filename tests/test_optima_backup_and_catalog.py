@@ -42,6 +42,14 @@ def test_available_data_sql_contains_core_modules():
     assert "HR_PAYROLL" in sql
 
 
+def test_available_data_sql_filters_counts_by_year():
+    sql = build_available_data_sql(year="2026")
+
+    assert "VaN_DeklRokMies >= 202601" in sql
+    assert "n.DeN_DataDok >= '2026-01-01'" in sql
+    assert "n.DeN_DataDok < '2027-01-01'" in sql
+
+
 def test_bank_module_query_filters_by_period():
     sql, notes = build_module_query("BANK", "202603")
 
@@ -49,3 +57,10 @@ def test_bank_module_query_filters_by_period():
     assert "BZp_DataDok >= '2026-03-01'" in sql
     assert "BZp_DataDok < '2026-04-01'" in sql
     assert notes
+
+
+def test_bank_module_query_filters_by_custom_date_range():
+    sql, _ = build_module_query("BANK", date_from="2026-03-10", date_to="2026-03-20")
+
+    assert "BZp_DataDok >= '2026-03-10'" in sql
+    assert "BZp_DataDok < '2026-03-21'" in sql

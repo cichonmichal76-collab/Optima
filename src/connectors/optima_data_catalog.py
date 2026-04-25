@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.core.enums import DataKind
@@ -38,9 +39,9 @@ DATA_MODULES: tuple[DataModule, ...] = (
         code="LEDGER",
         label="Dekrety księgowe",
         description="Zapisy księgowe Wn/Ma, dzienniki, status bufora i konta z planu kont.",
-        count_sql="SELECT COUNT(*) AS record_count FROM CDN.DekretyElem",
+        count_sql="SELECT COUNT(*) AS record_count FROM CDN.DekretyElem AS e JOIN CDN.DekretyNag AS n ON n.DeN_DeNId = e.DeE_DeNId",
         query_sql=None,
-        period_field="DeN_DataDok",
+        period_field="n.DeN_DataDok",
     ),
     DataModule(
         code="ACCOUNT_PLAN",
@@ -151,7 +152,7 @@ ORDER BY Knt_Kod, Knt_KntId;
         code="DOCUMENTS",
         label="Dokumenty i załączniki",
         description="Obieg dokumentów: nagłówki, tytuły, daty, statusy oraz liczba podpiętych plików.",
-        count_sql="SELECT COUNT(*) AS record_count FROM CDN.DokNag",
+        count_sql="SELECT COUNT(*) AS record_count FROM CDN.DokNag AS d",
         query_sql="""
 SELECT
     d.DoN_NumerPelny AS [Numer dokumentu],
@@ -197,6 +198,7 @@ FROM CDN.Trwale
 {where}
 ORDER BY SrT_DataZak DESC, SrT_SrTID DESC;
 """.strip(),
+        period_field="SrT_DataZak",
     ),
     DataModule(
         code="HR_PAYROLL",
@@ -229,16 +231,26 @@ ORDER BY e.PRE_Nazwisko, e.PRE_Imie1, e.PRE_PreId;
 MODULE_BY_CODE = {module.code: module for module in DATA_MODULES}
 
 
-def build_available_data_sql() -> str:
+def build_available_data_sql(
+    period_yyyymm: int | str | None = None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
     parts = []
     for module in DATA_MODULES:
+        count_sql = _append_condition(
+            module.count_sql,
+            _module_count_condition(module, period_yyyymm, year=year, date_from=date_from, date_to=date_to),
+        )
         parts.append(
             f"""
 SELECT
     N'{module.code}' AS [code],
     N'{module.label}' AS [label],
     N'{module.description}' AS [description],
-    ({module.count_sql}) AS [record_count],
+    ({count_sql}) AS [record_count],
     {1 if module.query_sql is not None or module.code in {'VAT_PURCHASE', 'VAT_SALE', 'LEDGER', 'ACCOUNT_PLAN'} else 0} AS [loadable],
     {1 if module.sensitive else 0} AS [sensitive]
 """.strip()
@@ -246,36 +258,159 @@ SELECT
     return "SET NOCOUNT ON;\n" + "\nUNION ALL\n".join(parts) + "\nORDER BY [record_count] DESC, [label];"
 
 
-def build_module_query(module_code: str, period_yyyymm: int | str | None = None) -> tuple[str, tuple[str, ...]]:
+def build_module_query(
+    module_code: str,
+    period_yyyymm: int | str | None = None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[str, tuple[str, ...]]:
     if module_code in {"VAT_PURCHASE", "VAT_SALE", "LEDGER", "ACCOUNT_PLAN"}:
         data_kind = DataKind(module_code)
-        query = build_optima_sql_query(data_kind, period_yyyymm)
+        query = build_optima_sql_query(data_kind, period_yyyymm, year=year, date_from=date_from, date_to=date_to)
         return query.sql, query.notes
 
     module = MODULE_BY_CODE.get(module_code)
     if not module or not module.query_sql:
         raise ValueError(f"Brak jawnego zapytania SQL dla modułu: {module_code}")
 
-    where = _period_where(module.period_field, period_yyyymm)
+    where = _period_where(module.period_field, period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     notes = (f"{module.label}: dane pobierane z jawnych tabel CDN Optimy.",)
     if module.sensitive:
         notes += ("Ten moduł zawiera dane wrażliwe; podgląd ogranicza część identyfikatorów.",)
     return "SET NOCOUNT ON;\n" + module.query_sql.format(where=where), notes
 
 
-def _period_where(period_field: str | None, period_yyyymm: int | str | None) -> str:
-    if not period_field or not period_yyyymm:
+def _period_where(
+    period_field: str | None,
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    condition = _date_condition(period_field, period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    return f"WHERE {condition}" if condition else ""
+
+
+def _module_count_condition(
+    module: DataModule,
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    if module.code in {"VAT_PURCHASE", "VAT_SALE"}:
+        return _vat_count_condition(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    return _date_condition(module.period_field, period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+
+
+def _append_condition(sql: str, condition: str) -> str:
+    if not condition:
+        return sql
+    glue = " AND " if " WHERE " in f" {sql.upper()} " else " WHERE "
+    return f"{sql}{glue}{condition}"
+
+
+def _date_condition(
+    period_field: str | None,
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    if not period_field:
         return ""
+    start, end = _date_bounds(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    conditions = []
+    if start:
+        conditions.append(f"{period_field} >= '{start.isoformat()}'")
+    if end:
+        conditions.append(f"{period_field} < '{end.isoformat()}'")
+    return " AND ".join(conditions)
+
+
+def _vat_count_condition(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    if date_from or date_to:
+        return _date_condition("VaN_DataWys", None, date_from=date_from, date_to=date_to)
+
+    period = _normalize_period(period_yyyymm)
+    if period is not None:
+        return f"VaN_DeklRokMies = {period}"
+
+    normalized_year = _normalize_year(year)
+    if normalized_year is not None:
+        return f"VaN_DeklRokMies >= {normalized_year}01 AND VaN_DeklRokMies <= {normalized_year}12"
+
+    return ""
+
+
+def _date_bounds(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[date | None, date | None]:
+    start = _normalize_date(date_from, "Data od")
+    end = _normalize_date(date_to, "Data do")
+    if start or end:
+        if start and end and start > end:
+            raise ValueError("Data od nie może być późniejsza niż data do.")
+        return start, end + timedelta(days=1) if end else None
+
+    if not period_yyyymm:
+        normalized_year = _normalize_year(year)
+        if normalized_year is None:
+            return None, None
+        return date(normalized_year, 1, 1), date(normalized_year + 1, 1, 1)
+
+    text = _period_text(period_yyyymm)
+    year_value = int(text[:4])
+    month = int(text[4:])
+    next_year = year_value + 1 if month == 12 else year_value
+    next_month = 1 if month == 12 else month + 1
+    return date(year_value, month, 1), date(next_year, next_month, 1)
+
+
+def _normalize_period(period_yyyymm: int | str | None) -> int | None:
+    if period_yyyymm in (None, ""):
+        return None
+    return int(_period_text(period_yyyymm))
+
+
+def _period_text(period_yyyymm: int | str) -> str:
     text = str(period_yyyymm).strip()
     if len(text) != 6 or not text.isdigit():
         raise ValueError("Okres musi mieć format RRRRMM, np. 202603.")
-    year = int(text[:4])
     month = int(text[4:])
     if not 1 <= month <= 12:
         raise ValueError("Miesiąc w okresie RRRRMM musi być z zakresu 01-12.")
-    next_year = year + 1 if month == 12 else year
-    next_month = 1 if month == 12 else month + 1
-    return (
-        f"WHERE {period_field} >= '{year:04d}-{month:02d}-01' "
-        f"AND {period_field} < '{next_year:04d}-{next_month:02d}-01'"
-    )
+    return text
+
+
+def _normalize_year(year: int | str | None) -> int | None:
+    if year in (None, ""):
+        return None
+    text = str(year).strip()
+    if len(text) != 4 or not text.isdigit():
+        raise ValueError("Rok musi mieć format RRRR, np. 2026.")
+    return int(text)
+
+
+def _normalize_date(value: str | None, label: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"{label} musi mieć format RRRR-MM-DD.") from exc

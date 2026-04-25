@@ -41,6 +41,20 @@ def test_ledger_query_uses_explicit_debit_credit_account_columns():
     assert "2026-04-01" in query.sql
 
 
+def test_ledger_query_filters_by_custom_date_range():
+    query = build_optima_sql_query(DataKind.LEDGER, date_from="2026-03-10", date_to="2026-03-20")
+
+    assert "n.DeN_DataDok >= '2026-03-10'" in query.sql
+    assert "n.DeN_DataDok < '2026-03-21'" in query.sql
+
+
+def test_vat_query_filters_by_year_when_month_is_not_selected():
+    query = build_optima_sql_query(DataKind.VAT_PURCHASE, year="2026")
+
+    assert "n.VaN_DeklRokMies >= 202601" in query.sql
+    assert "n.VaN_DeklRokMies <= 202612" in query.sql
+
+
 def test_account_plan_query_maps_plan_accounts():
     query = build_optima_sql_query(DataKind.ACCOUNT_PLAN)
 

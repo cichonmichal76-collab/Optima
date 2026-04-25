@@ -28,12 +28,6 @@
         <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
       </section>
 
-      <section class="side-section">
-        <label for="sqlPeriod">Okres danych</label>
-        <input id="sqlPeriod" type="text" value="202603" inputmode="numeric" aria-label="Okres RRRRMM">
-        <button id="refreshDataCatalog" class="plain-button" type="button">Odśwież dostępne dane</button>
-      </section>
-
       <section class="side-section data-catalog">
         <label>Dostępne dane</label>
         <div id="availableDataList" class="available-data-list">
@@ -66,13 +60,48 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div>
-          <h2 id="viewTitle">Baza SQL</h2>
-          <p id="viewSubtitle">Podłączenie lokalnej kopii Optimy z pliku BAK/BAC.</p>
+        <div class="topbar-db">
+          <span class="eyebrow">Podłączona baza</span>
+          <h2 id="connectedDatabaseName">Brak podłączonej bazy</h2>
+          <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz zakres danych.</p>
+          <div class="status-strip">
+            <span id="recordBadge">Wiersze: 0</span>
+          </div>
         </div>
-        <div class="status-strip">
-          <span id="databaseBadge">Baza: -</span>
-          <span id="recordBadge">Wiersze: 0</span>
+
+        <div class="time-filter-bar" aria-label="Filtry czasu">
+          <label>
+            Rok
+            <input id="filterYear" type="text" value="2026" inputmode="numeric" aria-label="Rok danych">
+          </label>
+          <label>
+            Miesiąc
+            <select id="filterMonth" aria-label="Miesiąc danych">
+              <option value="">Cały rok</option>
+              <option value="01">Styczeń</option>
+              <option value="02">Luty</option>
+              <option value="03" selected>Marzec</option>
+              <option value="04">Kwiecień</option>
+              <option value="05">Maj</option>
+              <option value="06">Czerwiec</option>
+              <option value="07">Lipiec</option>
+              <option value="08">Sierpień</option>
+              <option value="09">Wrzesień</option>
+              <option value="10">Październik</option>
+              <option value="11">Listopad</option>
+              <option value="12">Grudzień</option>
+            </select>
+          </label>
+          <label>
+            Od
+            <input id="filterDateFrom" type="date" aria-label="Data od">
+          </label>
+          <label>
+            Do
+            <input id="filterDateTo" type="date" aria-label="Data do">
+          </label>
+          <button id="applyTimeFilter" class="primary-button" type="button">Zastosuj</button>
+          <span id="timeFilterMeta" class="time-filter-meta">Filtr: marzec 2026</span>
         </div>
       </header>
 

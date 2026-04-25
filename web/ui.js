@@ -13,11 +13,11 @@ const SQL_SUPPORTED_KINDS = new Set([
   "FIXED_ASSETS",
   "HR_PAYROLL",
 ]);
-const PERIODLESS_KINDS = new Set(["ACCOUNT_PLAN", "CONTRACTORS", "FIXED_ASSETS", "HR_PAYROLL"]);
 
 export function initApp(state) {
   bindEvents(state);
   updateSqlControls();
+  updateTimeFilterMeta();
   renderPreview(state);
   updateBadges(state);
 }
@@ -26,13 +26,17 @@ function bindEvents(state) {
   $("#loadSql").addEventListener("click", () => loadSqlData(state));
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
-  $("#refreshDataCatalog").addEventListener("click", () => loadAvailableData(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#sqlDatabase").addEventListener("change", () => {
     updateBadges(state);
     loadAvailableData(state);
   });
   $("#dataKind").addEventListener("change", () => updateSqlControls());
+  $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
+  ["#filterYear", "#filterMonth", "#filterDateFrom", "#filterDateTo"].forEach((selector) => {
+    $(selector).addEventListener("change", updateTimeFilterMeta);
+    $(selector).addEventListener("input", updateTimeFilterMeta);
+  });
 }
 
 async function loadSqlData(state) {
@@ -54,7 +58,7 @@ async function loadModuleData(state, kind) {
     module: kind,
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
-    period: $("#sqlPeriod").value.trim(),
+    ...getTimeFilterPayload(),
   };
 
   $("#loadSql").disabled = true;
@@ -74,7 +78,8 @@ async function loadModuleData(state, kind) {
     state.headers = payload.headers || [];
     state.rows = payload.rows || [];
     state.format = "SQL";
-    state.fileName = `${request.database}:${kind}${request.period ? `:${request.period}` : ""}`;
+    state.fileName = `${request.database}:${kind}:${describeTimeFilter()}`;
+    state.currentModule = kind;
     if ($(`#dataKind option[value="${kind}"]`)) $("#dataKind").value = kind;
     $("#sqlMeta").textContent = `SQL OK: ${state.rows.length} wierszy. ${(payload.notes || [])[0] || ""}`;
     renderPreview(state);
@@ -149,6 +154,7 @@ async function connectBackup(state) {
     $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
     updateBadges(state);
     updateSqlControls();
+    updateTimeFilterMeta();
     await loadAvailableData(state);
   } catch (error) {
     $("#backupMeta").textContent = `Status: błąd podłączenia - ${error.message}`;
@@ -185,6 +191,7 @@ async function loadAvailableData(state) {
   const request = {
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
+    ...getTimeFilterPayload(),
   };
   try {
     const response = await fetch("/api/available-data", {
@@ -233,15 +240,12 @@ function updateSqlControls() {
   const kind = $("#dataKind").value;
   const supported = SQL_SUPPORTED_KINDS.has(kind);
   $("#loadSql").disabled = !supported;
-  $("#sqlPeriod").disabled = PERIODLESS_KINDS.has(kind) || !supported;
   if (!$("#sqlDatabase").value.trim()) {
     $("#sqlMeta").textContent = "Najpierw podłącz bazę.";
   } else if (!supported) {
     $("#sqlMeta").textContent = "SQL: brak jawnego pobierania dla tego typu danych.";
-  } else if (PERIODLESS_KINDS.has(kind)) {
-    $("#sqlMeta").textContent = "SQL: ten moduł nie wymaga okresu.";
   } else {
-    $("#sqlMeta").textContent = "SQL: podaj okres RRRRMM i pobierz dane.";
+    $("#sqlMeta").textContent = `SQL: pobieranie według filtra: ${describeTimeFilter()}.`;
   }
 }
 
@@ -253,16 +257,63 @@ function renderPreview(state) {
     ? state.rows.slice(0, 20).map((row) => `<tr>${state.headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
     : '<tr><td class="empty">Wybierz kafel z Dostępne dane albo kliknij Pobierz z SQL.</td></tr>';
   $("#previewMeta").textContent = state.rows.length
-    ? `${selectedKindLabel()} - pokazuję pierwsze ${Math.min(state.rows.length, 20)} z ${state.rows.length} wierszy`
+    ? `${selectedKindLabel()} - ${describeTimeFilter()} - pokazuję pierwsze ${Math.min(state.rows.length, 20)} z ${state.rows.length} wierszy`
     : "Brak danych";
 }
 
 function updateBadges(state) {
-  $("#databaseBadge").textContent = `Baza: ${$("#sqlDatabase").value.trim() || "-"}`;
+  $("#connectedDatabaseName").textContent = $("#sqlDatabase").value.trim() || "Brak podłączonej bazy";
   $("#recordBadge").textContent = `Wiersze: ${state.rows.length}`;
 }
 
 function selectedKindLabel() {
   const selected = $("#dataKind").selectedOptions[0];
   return selected ? selected.textContent : "Dane SQL";
+}
+
+async function applyTimeFilter(state) {
+  updateTimeFilterMeta();
+  await loadAvailableData(state);
+  if (state.currentModule) {
+    await loadModuleData(state, state.currentModule);
+  }
+}
+
+function getTimeFilterPayload() {
+  const year = $("#filterYear").value.trim();
+  const month = $("#filterMonth").value;
+  const dateFrom = $("#filterDateFrom").value;
+  const dateTo = $("#filterDateTo").value;
+
+  if (dateFrom || dateTo) {
+    return { date_from: dateFrom, date_to: dateTo };
+  }
+  if (year && month) {
+    return { period: `${year}${month}` };
+  }
+  if (year) {
+    return { year };
+  }
+  return {};
+}
+
+function updateTimeFilterMeta() {
+  $("#timeFilterMeta").textContent = `Filtr: ${describeTimeFilter()}`;
+}
+
+function describeTimeFilter() {
+  const year = $("#filterYear").value.trim();
+  const month = $("#filterMonth").value;
+  const monthLabel = $("#filterMonth").selectedOptions[0]?.textContent.toLowerCase() || "";
+  const dateFrom = $("#filterDateFrom").value;
+  const dateTo = $("#filterDateTo").value;
+
+  if (dateFrom || dateTo) {
+    if (dateFrom && dateTo) return `${dateFrom} - ${dateTo}`;
+    if (dateFrom) return `od ${dateFrom}`;
+    return `do ${dateTo}`;
+  }
+  if (year && month) return `${monthLabel} ${year}`;
+  if (year) return `rok ${year}`;
+  return "bez ograniczenia dat";
 }

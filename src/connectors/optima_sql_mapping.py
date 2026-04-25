@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from src.core.enums import DataKind
 
@@ -13,21 +13,35 @@ class OptimaSqlQuery:
     notes: tuple[str, ...]
 
 
-def build_optima_sql_query(data_kind: DataKind, period_yyyymm: int | str | None = None) -> OptimaSqlQuery:
+def build_optima_sql_query(
+    data_kind: DataKind,
+    period_yyyymm: int | str | None = None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaSqlQuery:
     if data_kind == DataKind.VAT_PURCHASE:
-        return _build_vat_query(data_kind, period_yyyymm, "ZAKUP")
+        return _build_vat_query(data_kind, period_yyyymm, "ZAKUP", year=year, date_from=date_from, date_to=date_to)
     if data_kind == DataKind.VAT_SALE:
-        return _build_vat_query(data_kind, period_yyyymm, "SPRZEDAŻ")
+        return _build_vat_query(data_kind, period_yyyymm, "SPRZEDAŻ", year=year, date_from=date_from, date_to=date_to)
     if data_kind == DataKind.LEDGER:
-        return _build_ledger_query(period_yyyymm)
+        return _build_ledger_query(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if data_kind == DataKind.ACCOUNT_PLAN:
         return _build_account_plan_query()
     raise ValueError(f"Brak jawnego mapowania SQL dla typu danych: {data_kind.value}")
 
 
-def _build_vat_query(data_kind: DataKind, period_yyyymm: int | str | None, register_name: str) -> OptimaSqlQuery:
-    period = _normalize_period(period_yyyymm)
-    period_filter = f"AND n.VaN_DeklRokMies = {period}" if period is not None else ""
+def _build_vat_query(
+    data_kind: DataKind,
+    period_yyyymm: int | str | None,
+    register_name: str,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaSqlQuery:
+    time_filter = _vat_time_condition(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     sql = f"""
 SET NOCOUNT ON;
 WITH VatPozycje AS (
@@ -54,7 +68,7 @@ SELECT
 FROM CDN.VatNag AS n
 LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = n.VaN_VaNID
 WHERE n.VaN_Rejestr = N'{register_name}'
-{period_filter}
+{time_filter}
 ORDER BY n.VaN_DataWys, n.VaN_Dokument, n.VaN_VaNID;
 """.strip()
     return OptimaSqlQuery(
@@ -67,12 +81,14 @@ ORDER BY n.VaN_DataWys, n.VaN_Dokument, n.VaN_VaNID;
     )
 
 
-def _build_ledger_query(period_yyyymm: int | str | None) -> OptimaSqlQuery:
-    period = _normalize_period(period_yyyymm)
-    date_filter = ""
-    if period is not None:
-        start, end = _month_bounds(period)
-        date_filter = f"WHERE n.DeN_DataDok >= '{start.isoformat()}' AND n.DeN_DataDok < '{end.isoformat()}'"
+def _build_ledger_query(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaSqlQuery:
+    date_filter = _date_where("n.DeN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
 
     sql = f"""
 SET NOCOUNT ON;
@@ -141,6 +157,93 @@ def _normalize_period(period_yyyymm: int | str | None) -> int | None:
     if not 1 <= month <= 12:
         raise ValueError("Miesiąc w okresie RRRRMM musi być z zakresu 01-12.")
     return int(text)
+
+
+def _normalize_year(year: int | str | None) -> int | None:
+    if year in (None, ""):
+        return None
+    text = str(year).strip()
+    if len(text) != 4 or not text.isdigit():
+        raise ValueError("Rok musi mieć format RRRR, np. 2026.")
+    return int(text)
+
+
+def _normalize_date(value: str | None, label: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"{label} musi mieć format RRRR-MM-DD.") from exc
+
+
+def _date_bounds(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[date | None, date | None]:
+    start = _normalize_date(date_from, "Data od")
+    end = _normalize_date(date_to, "Data do")
+    if start or end:
+        if start and end and start > end:
+            raise ValueError("Data od nie może być późniejsza niż data do.")
+        return start, end + timedelta(days=1) if end else None
+
+    period = _normalize_period(period_yyyymm)
+    if period is not None:
+        return _month_bounds(period)
+
+    normalized_year = _normalize_year(year)
+    if normalized_year is not None:
+        return date(normalized_year, 1, 1), date(normalized_year + 1, 1, 1)
+
+    return None, None
+
+
+def _date_where(
+    field: str,
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    start, end = _date_bounds(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    conditions = []
+    if start:
+        conditions.append(f"{field} >= '{start.isoformat()}'")
+    if end:
+        conditions.append(f"{field} < '{end.isoformat()}'")
+    return f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+
+def _vat_time_condition(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> str:
+    if date_from or date_to:
+        start, end = _date_bounds(None, date_from=date_from, date_to=date_to)
+        conditions = []
+        if start:
+            conditions.append(f"n.VaN_DataWys >= '{start.isoformat()}'")
+        if end:
+            conditions.append(f"n.VaN_DataWys < '{end.isoformat()}'")
+        return "AND " + " AND ".join(conditions) if conditions else ""
+
+    period = _normalize_period(period_yyyymm)
+    if period is not None:
+        return f"AND n.VaN_DeklRokMies = {period}"
+
+    normalized_year = _normalize_year(year)
+    if normalized_year is not None:
+        return f"AND n.VaN_DeklRokMies >= {normalized_year}01 AND n.VaN_DeklRokMies <= {normalized_year}12"
+
+    return ""
 
 
 def _month_bounds(period_yyyymm: int) -> tuple[date, date]:

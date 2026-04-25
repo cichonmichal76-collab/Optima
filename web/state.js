@@ -4,6 +4,7 @@ export function createInitialState() {
     rows: [],
     backups: [],
     availableData: [],
+    currentModule: "",
     format: "-",
     fileName: "",
   };
