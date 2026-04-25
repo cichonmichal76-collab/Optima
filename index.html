@@ -98,6 +98,19 @@
             <p>Przejdź do kontroli automatyzacji księgowań i ręcznych dekretów.</p>
           </article>
         </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">START</span>
+              <h3>Ulubione raporty</h3>
+            </div>
+            <span id="startFavoritesMeta" class="muted">Brak ulubionych raportów</span>
+          </div>
+          <div id="startFavorites" class="start-favorites">
+            <div class="available-card is-empty">Dodaj raport do ulubionych, a pojawi się tutaj jako szybki skrót.</div>
+          </div>
+        </section>
       </section>
 
       <section id="viewCommunication" class="app-view communication-view" aria-labelledby="communicationTitle">
@@ -211,6 +224,35 @@
         </section>
 
         <section class="metrics-grid" id="reportMetrics"></section>
+
+        <section class="panel report-actions-panel">
+          <div class="panel-head">
+            <div>
+              <h3>Akcje raportu</h3>
+              <span id="reportActionMeta" class="muted">SQL, wykresy, eksport i ulubione dla aktywnego raportu.</span>
+            </div>
+          </div>
+          <div class="report-actions-grid">
+            <button id="toggleFavoriteReport" class="plain-button" type="button">Dodaj do ulubionych</button>
+            <button id="toggleReportChart" class="plain-button" type="button">Włącz wykres</button>
+            <button id="exportExcelTable" class="plain-button" type="button">Excel: tabela</button>
+            <button id="exportExcelChart" class="plain-button" type="button">Excel: tabela + wykres</button>
+            <button id="exportPdfTable" class="plain-button" type="button">PDF: tabela</button>
+            <button id="exportPdfChart" class="plain-button" type="button">PDF: tabela + wykres</button>
+          </div>
+        </section>
+
+        <section id="reportChartPanel" class="panel report-chart-panel" hidden>
+          <div class="panel-head">
+            <div>
+              <h3>Wizualizacja raportu</h3>
+              <span id="reportChartMeta" class="muted">Wykres pojawi się po włączeniu wizualizacji i załadowaniu danych.</span>
+            </div>
+          </div>
+          <div id="reportChartContent" class="report-chart-content">
+            <div class="available-card is-empty">Brak danych do wizualizacji.</div>
+          </div>
+        </section>
 
         <section class="panel report-data-panel">
           <div class="panel-head">

@@ -1,4 +1,5 @@
-import { $, escapeHtml } from "./utils.js";
+import { exportReportFile } from "./exporters.js";
+import { $, escapeHtml, parseAmount } from "./utils.js";
 
 const MODULE_LABELS = {
   VAT_PURCHASE: "Rejestr VAT zakup",
@@ -897,19 +898,29 @@ const REPORT_GROUPS = [
 ];
 
 const REPORTS = REPORT_GROUPS.flatMap((group) =>
-  group.reports.map((report) => ({ ...report, groupId: group.id, groupTitle: group.title })),
+  group.reports.map((report) => ({
+    ...report,
+    queryKey: report.queryKey || report.key,
+    groupId: group.id,
+    groupTitle: group.title,
+  })),
 );
 
 const REPORTS_BY_KEY = Object.fromEntries(REPORTS.map((report) => [report.key, report]));
 const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [group.id, group]));
 const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
+const FAVORITES_STORAGE_KEY = "optimaAudit.favoriteReports";
 
 export function initApp(state) {
+  state.favoriteReports = restoreFavoriteReports();
   renderSideMenu(state);
+  renderStartFavorites(state);
   bindEvents(state);
   renderActiveReport(state);
   renderReportData(state);
+  renderReportActions(state);
+  renderReportChart(state);
   renderCurrentView(state);
   updateTimeFilterMeta();
   updateBadges(state);
@@ -921,6 +932,12 @@ function bindEvents(state) {
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
+  $("#toggleFavoriteReport").addEventListener("click", () => toggleFavoriteReport(state));
+  $("#toggleReportChart").addEventListener("click", () => toggleReportChart(state));
+  $("#exportExcelTable").addEventListener("click", () => exportActiveReport(state, "xlsx", false));
+  $("#exportExcelChart").addEventListener("click", () => exportActiveReport(state, "xlsx", true));
+  $("#exportPdfTable").addEventListener("click", () => exportActiveReport(state, "pdf", false));
+  $("#exportPdfChart").addEventListener("click", () => exportActiveReport(state, "pdf", true));
   $("#applyReportTimeFilter").addEventListener("click", () => applyReportTimeFilter(state));
   $("#clearReportTimeFilters").addEventListener("click", () => clearTimeFilters(state));
   $("#sqlDatabase").addEventListener("change", () => {
@@ -958,6 +975,10 @@ function bindEvents(state) {
     const reportItem = event.target.closest("[data-report-key]");
     if (reportItem) selectReport(state, reportItem.dataset.reportKey);
   });
+  $("#startFavorites").addEventListener("click", (event) => {
+    const favorite = event.target.closest("[data-favorite-report]");
+    if (favorite) selectReport(state, favorite.dataset.favoriteReport);
+  });
 }
 
 function selectView(state, viewKey) {
@@ -974,6 +995,7 @@ function selectView(state, viewKey) {
   state.currentView = viewKey === "communication" ? "communication" : "start";
   renderSideMenu(state);
   renderCurrentView(state);
+  renderStartFavorites(state);
   updateBadges(state);
 }
 
@@ -1038,6 +1060,24 @@ function persistDatabase(databaseName) {
     }
   } catch (_error) {
     // Brak localStorage nie blokuje pracy z bazą w tej sesji.
+  }
+}
+
+function restoreFavoriteReports() {
+  try {
+    const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((key) => REPORTS_BY_KEY[key]) : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function persistFavoriteReports(favorites) {
+  try {
+    window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites || []));
+  } catch (_error) {
+    // Brak localStorage nie blokuje pracy z ulubionymi w tej sesji.
   }
 }
 
@@ -1225,12 +1265,6 @@ function defaultMonthValue() {
 
 async function loadActiveReportData(state) {
   const report = getCurrentReport(state);
-  if (!report?.queryKey) {
-    clearReportData(state);
-    state.reportDataStatus = "unsupported";
-    renderReportData(state);
-    return;
-  }
   if (!$("#sqlDatabase").value.trim()) {
     const restored = await ensureDatabaseAvailable(state);
     if (!restored) {
@@ -1247,6 +1281,8 @@ async function loadActiveReportData(state) {
 
   const request = {
     report: report.queryKey,
+    report_title: report.title,
+    module: report.primaryModule,
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
     ...getTimeFilterPayload(),
@@ -1264,12 +1300,16 @@ async function loadActiveReportData(state) {
     }
     state.reportHeaders = payload.headers || [];
     state.reportRows = payload.rows || [];
+    state.reportNotes = payload.notes || [];
+    state.reportSource = payload.source || null;
     state.reportDataStatus = "ready";
     state.reportDataKey = report.key;
     renderReportData(state);
   } catch (error) {
     state.reportHeaders = [];
     state.reportRows = [];
+    state.reportNotes = [];
+    state.reportSource = null;
     state.reportDataStatus = "error";
     state.reportDataError = error.message;
     state.reportDataKey = report.key;
@@ -1280,6 +1320,8 @@ async function loadActiveReportData(state) {
 function clearReportData(state) {
   state.reportHeaders = [];
   state.reportRows = [];
+  state.reportNotes = [];
+  state.reportSource = null;
   state.reportDataStatus = "idle";
   state.reportDataKey = "";
   state.reportDataError = "";
@@ -1439,6 +1481,19 @@ function renderCurrentView(state) {
   });
 }
 
+function renderStartFavorites(state) {
+  const favorites = (state.favoriteReports || [])
+    .map((key) => REPORTS_BY_KEY[key])
+    .filter(Boolean);
+
+  $("#startFavoritesMeta").textContent = favorites.length
+    ? `${favorites.length} ulubionych raportów`
+    : "Brak ulubionych raportów";
+  $("#startFavorites").innerHTML = favorites.length
+    ? favorites.map((report) => startFavoriteCard(report)).join("")
+    : '<div class="available-card is-empty">Dodaj raport do ulubionych, a pojawi się tutaj jako szybki skrót.</div>';
+}
+
 function sideViewItem(viewKey, title, description, state) {
   const active = state.currentView === viewKey ? " is-active" : "";
   return `
@@ -1491,7 +1546,9 @@ function renderActiveReport(state) {
   $("#reportLayoutList").innerHTML = report.layout.map((item) => stackItem(item, "layout")).join("");
   $("#reportAlerts").innerHTML = report.alerts.map((item) => stackItem(item, "alert")).join("");
   $("#reportMetrics").innerHTML = buildMetricCards(report, state).map(metricCard).join("");
+  renderReportActions(state);
   renderReportData(state);
+  renderReportChart(state);
   updateBadges(state);
 }
 
@@ -1499,40 +1556,46 @@ function renderReportData(state) {
   const report = getCurrentReport(state);
   const status = state.reportDataStatus;
   const rowsBelongToReport = state.reportDataKey === report.key;
-  $("#refreshReportData").disabled = !report?.queryKey || !$("#sqlDatabase").value.trim() || status === "loading";
+  $("#refreshReportData").disabled = !$("#sqlDatabase").value.trim() || status === "loading";
 
-  if (!report?.queryKey) {
-    $("#reportDataMeta").textContent = "Ten raport ma zdefiniowany sens i układ, ale nie ma jeszcze podpiętego zapytania SQL.";
-    renderReportTable([], [], "Dane szczegółowe dla tego raportu będą podpinane etapami.");
-    return;
-  }
   if (!$("#sqlDatabase").value.trim()) {
     $("#reportDataMeta").textContent = "Podłącz bazę, żeby zobaczyć konkretne dokumenty z raportu.";
     renderReportTable([], [], "Najpierw podłącz bazę SQL.");
+    renderReportActions(state);
+    renderReportChart(state);
     return;
   }
   if (status === "loading") {
     $("#reportDataMeta").textContent = `Pobieram wyniki raportu „${report.title}” dla filtra: ${describeTimeFilter()}.`;
     renderReportTable([], [], "Pobieram dane z SQL...");
+    renderReportActions(state);
+    renderReportChart(state);
     return;
   }
   if (status === "error" && rowsBelongToReport) {
     $("#reportDataMeta").textContent = `Błąd pobierania raportu: ${state.reportDataError || "nieznany błąd"}`;
     renderReportTable([], [], "Nie udało się pobrać wyników raportu.");
+    renderReportActions(state);
+    renderReportChart(state);
     return;
   }
   if (!rowsBelongToReport) {
-    $("#reportDataMeta").textContent = "Raport ma podpięte zapytanie SQL.";
+    $("#reportDataMeta").textContent = "Raport ma aktywne połączenie do SQL i czeka na załadowanie wyników.";
     renderReportTable([], [], "Kliknij „Odśwież wyniki”, żeby pobrać dane.");
+    renderReportActions(state);
+    renderReportChart(state);
     return;
   }
 
-  $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.`;
+  const sourceLabel = state.reportSource?.module ? ` źródło: ${moduleLabel(state.reportSource.module)}.` : "";
+  $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
   renderReportTable(
     state.reportHeaders,
     state.reportRows,
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
   );
+  renderReportActions(state);
+  renderReportChart(state);
 }
 
 function renderReportTable(headers, rows, emptyMessage) {
@@ -1542,6 +1605,174 @@ function renderReportTable(headers, rows, emptyMessage) {
   $("#reportDataRows").innerHTML = rows.length
     ? rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
     : `<tr><td class="empty" colspan="${Math.max(headers.length, 1)}">${escapeHtml(emptyMessage)}</td></tr>`;
+}
+
+function renderReportActions(state) {
+  const report = getCurrentReport(state);
+  const hasData = state.reportDataKey === report.key && state.reportRows.length > 0;
+  const isFavorite = (state.favoriteReports || []).includes(report.key);
+
+  $("#toggleFavoriteReport").textContent = isFavorite ? "Usuń z ulubionych" : "Dodaj do ulubionych";
+  $("#toggleFavoriteReport").classList.toggle("is-active", isFavorite);
+  $("#toggleReportChart").textContent = state.reportChartEnabled ? "Ukryj wykres" : "Włącz wykres";
+  $("#toggleReportChart").disabled = !hasData;
+  $("#exportExcelTable").disabled = !$("#sqlDatabase").value.trim();
+  $("#exportExcelChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(state.reportHeaders, state.reportRows);
+  $("#exportPdfTable").disabled = !$("#sqlDatabase").value.trim();
+  $("#exportPdfChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(state.reportHeaders, state.reportRows);
+
+  const readyLabel = hasData
+    ? `SQL aktywny, ${state.reportRows.length.toLocaleString("pl-PL")} wierszy gotowych do eksportu.`
+    : "SQL aktywny. Załaduj dane, aby włączyć wykres i eksport z danymi.";
+  $("#reportActionMeta").textContent = readyLabel;
+}
+
+function renderReportChart(state) {
+  const report = getCurrentReport(state);
+  const hasRows = state.reportDataKey === report.key && state.reportRows.length > 0;
+  const chartModel = hasRows ? buildChartModel(state.reportHeaders, state.reportRows) : null;
+  const panel = $("#reportChartPanel");
+
+  panel.hidden = !state.reportChartEnabled;
+  if (!state.reportChartEnabled) {
+    $("#reportChartMeta").textContent = "Wizualizacja jest wyłączona dla tego raportu.";
+    $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Kliknij „Włącz wykres”, aby zobaczyć wizualizację.</div>';
+    return;
+  }
+  if (!hasRows) {
+    $("#reportChartMeta").textContent = "Najpierw załaduj dane raportu, aby zbudować wykres.";
+    $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Brak danych do wizualizacji.</div>';
+    return;
+  }
+  if (!chartModel) {
+    $("#reportChartMeta").textContent = "Tego zestawu nie da się automatycznie zwizualizować na podstawie aktualnych kolumn.";
+    $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Nie znaleziono pary etykieta + wartość liczbową.</div>';
+    return;
+  }
+
+  $("#reportChartMeta").textContent = `Wykres oparty o kolumny „${chartModel.labelHeader}” i „${chartModel.valueHeader}”.`;
+  $("#reportChartContent").innerHTML = chartMarkup(chartModel);
+}
+
+function startFavoriteCard(report) {
+  return `
+    <button type="button" class="start-card start-favorite-card" data-favorite-report="${escapeHtml(report.key)}">
+      <span class="meta-label">${escapeHtml(report.section)}</span>
+      <strong>${escapeHtml(report.title)}</strong>
+      <p>${escapeHtml(report.question)}</p>
+    </button>`;
+}
+
+function toggleFavoriteReport(state) {
+  const report = getCurrentReport(state);
+  const current = new Set(state.favoriteReports || []);
+  if (current.has(report.key)) current.delete(report.key);
+  else current.add(report.key);
+  state.favoriteReports = [...current];
+  persistFavoriteReports(state.favoriteReports);
+  renderStartFavorites(state);
+  renderReportActions(state);
+}
+
+function toggleReportChart(state) {
+  state.reportChartEnabled = !state.reportChartEnabled;
+  renderReportActions(state);
+  renderReportChart(state);
+}
+
+async function exportActiveReport(state, format, includeChart) {
+  const report = getCurrentReport(state);
+  const chartAllowed = includeChart && hasChartData(state.reportHeaders, state.reportRows);
+  const payload = {
+    format,
+    include_chart: chartAllowed,
+    title: report.title,
+    report_title: report.title,
+    filter_label: describeTimeFilter(),
+    headers: state.reportHeaders,
+    rows: state.reportDataKey === report.key ? state.reportRows : [],
+    notes: [
+      `Raport: ${report.title}`,
+      `Sekcja: ${report.section}`,
+      ...(state.reportNotes || []),
+    ],
+  };
+
+  try {
+    const result = await exportReportFile(payload);
+    $("#reportActionMeta").textContent = `Przygotowano plik ${result.file_name}.`;
+  } catch (error) {
+    $("#reportActionMeta").textContent = `Błąd eksportu: ${error.message}`;
+  }
+}
+
+function buildChartModel(headers, rows) {
+  if (!headers.length || !rows.length) return null;
+  const labelHeader = headers.find((header) => hasTextValues(header, rows)) || headers[0];
+  const valueHeader = headers
+    .filter((header) => header !== labelHeader)
+    .sort((left, right) => numericScore(right, rows) - numericScore(left, rows))[0];
+  if (!labelHeader || !valueHeader || numericScore(valueHeader, rows) === 0) return null;
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const label = String(row[labelHeader] ?? "").trim();
+    if (!label) return;
+    const value = coerceChartNumber(row[valueHeader]);
+    if (value === null) return;
+    grouped.set(label, (grouped.get(label) || 0) + value);
+  });
+
+  const points = [...grouped.entries()]
+    .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]))
+    .slice(0, 8);
+  if (!points.length) return null;
+
+  return { labelHeader, valueHeader, points };
+}
+
+function chartMarkup(chartModel) {
+  const maxValue = Math.max(...chartModel.points.map(([, value]) => Math.abs(value)), 1);
+  return `
+    <div class="report-chart-bars">
+      ${chartModel.points.map(([label, value]) => {
+        const width = Math.max(6, Math.round((Math.abs(value) / maxValue) * 100));
+        return `
+          <article class="report-chart-row">
+            <div class="report-chart-label">${escapeHtml(label)}</div>
+            <div class="report-chart-bar-track">
+              <div class="report-chart-bar" style="width: ${width}%"></div>
+            </div>
+            <div class="report-chart-value">${escapeHtml(value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</div>
+          </article>`;
+      }).join("")}
+    </div>`;
+}
+
+function hasChartData(headers, rows) {
+  return Boolean(buildChartModel(headers, rows));
+}
+
+function hasTextValues(header, rows) {
+  return rows.slice(0, 40).some((row) => {
+    const value = String(row[header] ?? "").trim();
+    return value && coerceChartNumber(value) === null;
+  });
+}
+
+function numericScore(header, rows) {
+  return rows.slice(0, 80).reduce((score, row) => (coerceChartNumber(row[header]) !== null ? score + 1 : score), 0);
+}
+
+function coerceChartNumber(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  if (!/^[-+()0-9\s.,]+$/.test(text)) return null;
+  const minusCount = (text.match(/-/g) || []).length;
+  if (minusCount > 1) return null;
+  if (minusCount === 1 && !text.startsWith("-")) return null;
+  const parsed = parseAmount(text);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function buildMetricCards(report, state) {

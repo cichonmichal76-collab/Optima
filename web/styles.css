@@ -519,6 +519,12 @@ input[type="date"] {
   gap: 16px;
 }
 
+.start-favorites {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
 .start-card {
   display: grid;
   gap: 8px;
@@ -534,6 +540,13 @@ input[type="date"] {
 
 .start-card strong {
   font-size: 20px;
+}
+
+.start-favorite-card {
+  width: 100%;
+  min-height: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .communication-grid {
@@ -560,6 +573,59 @@ input[type="date"] {
 .report-data-panel {
   display: grid;
   gap: 12px;
+}
+
+.report-actions-panel,
+.report-chart-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.report-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-actions-grid .plain-button.is-active {
+  border-color: rgba(23, 107, 91, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.report-chart-content {
+  min-height: 120px;
+}
+
+.report-chart-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.report-chart-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.4fr) minmax(120px, auto);
+  gap: 12px;
+  align-items: center;
+}
+
+.report-chart-label,
+.report-chart-value {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.report-chart-bar-track {
+  min-height: 18px;
+  border-radius: 999px;
+  background: #e5ece7;
+  overflow: hidden;
+}
+
+.report-chart-bar {
+  min-height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0%, #2f8f7b 100%);
 }
 
 .report-table-wrap {
@@ -909,8 +975,10 @@ pre {
   .report-meta-grid,
   .report-filter-grid,
   .metrics-grid,
+  .report-actions-grid,
   .report-layout,
   .start-grid,
+  .start-favorites,
   .communication-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -935,10 +1003,16 @@ pre {
   .report-meta-grid,
   .report-filter-grid,
   .metrics-grid,
+  .report-actions-grid,
   .report-layout,
   .start-grid,
+  .start-favorites,
   .communication-grid,
   .connection-form {
+    grid-template-columns: 1fr;
+  }
+
+  .report-chart-row {
     grid-template-columns: 1fr;
   }
 

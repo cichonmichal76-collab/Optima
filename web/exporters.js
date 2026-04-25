@@ -1,18 +1,22 @@
-import { download, escapeHtml } from "./utils.js";
-
-export function exportJson(reportJson) {
-  download("optima-audit-report.json", "application/json", reportJson);
+export async function exportReportFile(payload) {
+  const response = await fetch("/api/report-export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) {
+    throw new Error(result.error || "Nie udało się przygotować eksportu raportu.");
+  }
+  triggerDownload(result.download_url, result.file_name);
+  return result;
 }
 
-export function exportHtml(issues) {
-  const rows = issues.map((issue) => (
-    `<tr><td>${escapeHtml(issue.level)}</td><td>${escapeHtml(issue.area)}</td><td>${escapeHtml(issue.document)}</td><td>${escapeHtml(issue.contractor)}</td><td>${escapeHtml(issue.issue)}</td><td>${escapeHtml(issue.recommendation)}</td></tr>`
-  )).join("");
-  const html = `<!doctype html><meta charset="utf-8"><title>Raport audytu</title><h1>Raport audytu Optima</h1><p>Wyniki wymagaja weryfikacji przez osobe odpowiedzialna za ksiegowosc.</p><table border="1" cellspacing="0" cellpadding="6"><tr><th>Poziom</th><th>Obszar</th><th>Dokument</th><th>Kontrahent</th><th>Problem</th><th>Rekomendacja</th></tr>${rows}</table>`;
-  download("optima-audit-report.html", "text/html", html);
+function triggerDownload(url, fileName) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
 }
-
-export function exportExcel(tableHtml) {
-  download("optima-audit-report.xls", "application/vnd.ms-excel", tableHtml);
-}
-
