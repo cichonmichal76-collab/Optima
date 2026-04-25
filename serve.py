@@ -15,6 +15,7 @@ import pandas as pd
 
 from src.connectors.optima_backup import inspect_backup, restore_backup, scan_backup_files
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
+from src.connectors.optima_report_queries import build_report_query
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
 from src.core.enums import DataKind
@@ -46,6 +47,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/available-data":
             self._handle_available_data()
+            return
+        if self.path == "/api/report-data":
+            self._handle_report_data()
             return
         if self.path == "/api/backup-info":
             self._handle_backup_info()
@@ -106,6 +110,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             response = available_data(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_report_data(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = report_data(payload)
             self._send_json(response)
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -291,6 +303,38 @@ def available_data(payload: dict[str, Any]) -> dict[str, Any]:
         "date_from": date_from,
         "date_to": date_to,
         "modules": rows,
+    }
+
+
+def report_data(payload: dict[str, Any]) -> dict[str, Any]:
+    report_key = str(payload.get("report") or payload.get("report_key") or "").strip()
+    server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
+    database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    period = payload.get("period")
+    year = payload.get("year")
+    date_from = str(payload.get("date_from") or "").strip() or None
+    date_to = str(payload.get("date_to") or "").strip() or None
+    sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+
+    query = build_report_query(report_key, period, year=year, date_from=date_from, date_to=date_to)
+    headers, rows = run_sqlcmd_table(query.sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
+    if len(rows) > MAX_SQL_ROWS:
+        rows = rows[:MAX_SQL_ROWS]
+
+    return {
+        "format": "SQL",
+        "headers": headers,
+        "rows": rows,
+        "notes": [f"Źródło SQL: {server} / {database}", *query.notes],
+        "source": {
+            "server": server,
+            "database": database,
+            "report": report_key,
+            "period": period,
+            "year": year,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
     }
 
 

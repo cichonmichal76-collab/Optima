@@ -361,6 +361,15 @@ input[type="date"] {
   min-width: 0;
 }
 
+.report-data-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.report-table-wrap {
+  max-height: 520px;
+}
+
 .report-hero {
   padding: 18px;
 }

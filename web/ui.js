@@ -278,6 +278,7 @@ const REPORT_GROUPS = [
         summary: "Raport ręcznych księgowań, pokazujący gdzie automatyzacja nie działa lub jest obchodzona.",
         question: "Które dokumenty są księgowane ręcznie mimo możliwości automatyzacji?",
         priority: "Wysoki",
+        queryKey: "manual-entries",
         sources: ["Optima"],
         filters: ["Okres od-do", "Osoba księgująca", "Typ dokumentu", "Kwota od-do"],
         tags: ["dekret ręczny", "kontrola ręczna", "automatyzacja"],
@@ -905,6 +906,7 @@ export function initApp(state) {
   renderReportSidebar(state);
   bindEvents(state);
   renderActiveReport(state);
+  renderReportData(state);
   updateTimeFilterMeta();
   updateBadges(state);
 }
@@ -913,10 +915,12 @@ function bindEvents(state) {
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
+  $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
   $("#sqlDatabase").addEventListener("change", () => {
     updateBadges(state);
     loadAvailableData(state);
     renderActiveReport(state);
+    loadActiveReportData(state);
   });
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
   $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
@@ -934,9 +938,11 @@ function bindEvents(state) {
 function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
   state.currentReportKey = reportKey;
+  clearReportData(state);
   renderReportSidebar(state);
   renderActiveReport(state);
   updateBadges(state);
+  loadActiveReportData(state);
 }
 
 async function scanBackups(state) {
@@ -1003,6 +1009,7 @@ async function connectBackup(state) {
     updateBadges(state);
     updateTimeFilterMeta();
     await loadAvailableData(state);
+    await loadActiveReportData(state);
   } catch (error) {
     $("#sqlDatabase").value = previousDatabase;
     updateBadges(state);
@@ -1062,6 +1069,65 @@ async function loadAvailableData(state) {
   }
 }
 
+async function loadActiveReportData(state) {
+  const report = getCurrentReport(state);
+  if (!report?.queryKey) {
+    clearReportData(state);
+    state.reportDataStatus = "unsupported";
+    renderReportData(state);
+    return;
+  }
+  if (!$("#sqlDatabase").value.trim()) {
+    clearReportData(state);
+    state.reportDataStatus = "no-database";
+    renderReportData(state);
+    return;
+  }
+
+  state.reportDataStatus = "loading";
+  state.reportDataKey = report.key;
+  renderReportData(state);
+
+  const request = {
+    report: report.queryKey,
+    server: $("#sqlServer").value.trim(),
+    database: $("#sqlDatabase").value.trim(),
+    ...getTimeFilterPayload(),
+  };
+
+  try {
+    const response = await fetch("/api/report-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error || "Nie udało się pobrać wyników raportu.");
+    }
+    state.reportHeaders = payload.headers || [];
+    state.reportRows = payload.rows || [];
+    state.reportDataStatus = "ready";
+    state.reportDataKey = report.key;
+    renderReportData(state);
+  } catch (error) {
+    state.reportHeaders = [];
+    state.reportRows = [];
+    state.reportDataStatus = "error";
+    state.reportDataError = error.message;
+    state.reportDataKey = report.key;
+    renderReportData(state);
+  }
+}
+
+function clearReportData(state) {
+  state.reportHeaders = [];
+  state.reportRows = [];
+  state.reportDataStatus = "idle";
+  state.reportDataKey = "";
+  state.reportDataError = "";
+}
+
 function renderNoDatabase(state) {
   const message = '<div class="available-card is-empty">Najpierw podłącz bazę.</div>';
   $("#databaseDataList").innerHTML = message;
@@ -1112,6 +1178,7 @@ function updateBadges(state) {
 async function applyTimeFilter(state) {
   updateTimeFilterMeta();
   await loadAvailableData(state);
+  await loadActiveReportData(state);
 }
 
 async function clearTimeFilters(state) {
@@ -1205,7 +1272,57 @@ function renderActiveReport(state) {
   $("#reportLayoutList").innerHTML = report.layout.map((item) => stackItem(item, "layout")).join("");
   $("#reportAlerts").innerHTML = report.alerts.map((item) => stackItem(item, "alert")).join("");
   $("#reportMetrics").innerHTML = buildMetricCards(report, state).map(metricCard).join("");
+  renderReportData(state);
   updateBadges(state);
+}
+
+function renderReportData(state) {
+  const report = getCurrentReport(state);
+  const status = state.reportDataStatus;
+  const rowsBelongToReport = state.reportDataKey === report.key;
+  $("#refreshReportData").disabled = !report?.queryKey || !$("#sqlDatabase").value.trim() || status === "loading";
+
+  if (!report?.queryKey) {
+    $("#reportDataMeta").textContent = "Ten raport ma zdefiniowany sens i układ, ale nie ma jeszcze podpiętego zapytania SQL.";
+    renderReportTable([], [], "Dane szczegółowe dla tego raportu będą podpinane etapami.");
+    return;
+  }
+  if (!$("#sqlDatabase").value.trim()) {
+    $("#reportDataMeta").textContent = "Podłącz bazę, żeby zobaczyć konkretne dokumenty z raportu.";
+    renderReportTable([], [], "Najpierw podłącz bazę SQL.");
+    return;
+  }
+  if (status === "loading") {
+    $("#reportDataMeta").textContent = `Pobieram wyniki raportu „${report.title}” dla filtra: ${describeTimeFilter()}.`;
+    renderReportTable([], [], "Pobieram dane z SQL...");
+    return;
+  }
+  if (status === "error" && rowsBelongToReport) {
+    $("#reportDataMeta").textContent = `Błąd pobierania raportu: ${state.reportDataError || "nieznany błąd"}`;
+    renderReportTable([], [], "Nie udało się pobrać wyników raportu.");
+    return;
+  }
+  if (!rowsBelongToReport) {
+    $("#reportDataMeta").textContent = "Raport ma podpięte zapytanie SQL.";
+    renderReportTable([], [], "Kliknij „Odśwież wyniki”, żeby pobrać dane.");
+    return;
+  }
+
+  $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.`;
+  renderReportTable(
+    state.reportHeaders,
+    state.reportRows,
+    "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
+  );
+}
+
+function renderReportTable(headers, rows, emptyMessage) {
+  $("#reportDataHead").innerHTML = headers.length
+    ? `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`
+    : "";
+  $("#reportDataRows").innerHTML = rows.length
+    ? rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
+    : `<tr><td class="empty" colspan="${Math.max(headers.length, 1)}">${escapeHtml(emptyMessage)}</td></tr>`;
 }
 
 function buildMetricCards(report, state) {

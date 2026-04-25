@@ -119,6 +119,24 @@
 
         <section class="metrics-grid" id="reportMetrics"></section>
 
+        <section class="panel report-data-panel">
+          <div class="panel-head">
+            <div>
+              <h3>Wyniki raportu</h3>
+              <span class="muted" id="reportDataMeta">Wybierz raport z podpiętym zapytaniem SQL.</span>
+            </div>
+            <button id="refreshReportData" class="plain-button" type="button">Odśwież wyniki</button>
+          </div>
+          <div class="table-wrap report-table-wrap">
+            <table>
+              <thead id="reportDataHead"></thead>
+              <tbody id="reportDataRows">
+                <tr><td class="empty">Dane pojawią się tutaj po wybraniu raportu z podpiętym zapytaniem.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <div class="report-layout">
           <section class="panel">
             <div class="panel-head">
