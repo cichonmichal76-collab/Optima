@@ -49,7 +49,7 @@ python serve.py
 
 Web GUI jest lekkim lokalnym panelem do podgladu, mapowania i szybkiego audytu XLSX/XLS/CSV/JSON/XML w przegladarce. Pelna aplikacja desktopowa pozostaje w `app.py`.
 
-Po uruchomieniu przez `python serve.py` panel web moze pobierac dane bezposrednio z lokalnej kopii SQL Optimy przez przycisk `Pobierz z SQL`. Obslugiwane sa: rejestr VAT zakup, rejestr VAT sprzedaz, zapisy ksiegowe i plan kont.
+Po uruchomieniu przez `python serve.py` panel web prowadzi prace od bazy SQL: wskazujesz lokalny plik `.BAK`/`.BAC`, program sprawdza backup, odtwarza go do bazy roboczej read-only, a nastepnie pokazuje kafel `Dostepne dane` w sidebarze. Obslugiwane pewne moduly do pobrania: rejestry VAT, dekrety, plan kont, rozrachunki, bank/kasa, JPK/deklaracje, kontrahenci, dokumenty, srodki trwale oraz kadry/place.
 
 ## Eksport z odtworzonej bazy SQL Optima
 

@@ -113,6 +113,10 @@ select {
   gap: 8px;
 }
 
+.data-catalog {
+  min-height: 0;
+}
+
 label {
   color: inherit;
   font-size: 13px;
@@ -144,6 +148,81 @@ input[type="file"] {
   color: #bfd3cb;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.available-data-list {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.available-data-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.available-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6fbf8;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.panel .available-card {
+  border-color: var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+}
+
+.available-card:hover {
+  border-color: #9ad9c5;
+}
+
+.available-card.is-empty,
+.available-card.is-disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.available-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.available-count {
+  color: #b8f1df;
+  white-space: nowrap;
+}
+
+.panel .available-count {
+  color: var(--accent);
+}
+
+.available-desc {
+  color: #bfd3cb;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.panel .available-desc {
+  color: var(--muted);
+}
+
+.available-note {
+  color: #f3c981;
+  font-size: 12px;
+}
+
+.panel .available-note {
+  color: var(--amber);
 }
 
 .side-actions {

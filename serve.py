@@ -12,6 +12,8 @@ from typing import Any
 
 import pandas as pd
 
+from src.connectors.optima_backup import inspect_backup, restore_backup, scan_backup_files
+from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
 from src.core.enums import DataKind
@@ -38,7 +40,25 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/sql-preview":
             self._handle_sql_preview()
             return
+        if self.path == "/api/module-preview":
+            self._handle_module_preview()
+            return
+        if self.path == "/api/available-data":
+            self._handle_available_data()
+            return
+        if self.path == "/api/backup-info":
+            self._handle_backup_info()
+            return
+        if self.path == "/api/connect-backup":
+            self._handle_connect_backup()
+            return
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
+
+    def do_GET(self) -> None:
+        if self.path == "/api/backups":
+            self._send_json({"backups": scan_backup_files()})
+            return
+        super().do_GET()
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -66,6 +86,47 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             response = load_sql_preview(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_module_preview(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = load_module_preview(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_available_data(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = available_data(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_backup_info(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = inspect_backup(
+                str(payload.get("path") or ""),
+                server=str(payload.get("server") or r".\SQLEXPRESS02"),
+                sqlcmd_path=str(payload.get("sqlcmd") or "").strip() or None,
+            )
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_connect_backup(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = restore_backup(
+                str(payload.get("path") or ""),
+                server=str(payload.get("server") or r".\SQLEXPRESS02"),
+                target_database=str(payload.get("target_database") or "").strip() or None,
+                sqlcmd_path=str(payload.get("sqlcmd") or "").strip() or None,
+            )
             self._send_json(response)
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -170,6 +231,48 @@ def load_sql_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "kind": data_kind.value,
             "period": period,
         },
+    }
+
+
+def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    module_code = str(payload.get("module") or payload.get("kind") or "").strip()
+    server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
+    database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    period = payload.get("period")
+    sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+
+    sql, notes = build_module_query(module_code, period)
+    headers, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
+    if len(rows) > MAX_SQL_ROWS:
+        notes = (*notes, f"Wczytano pierwsze {MAX_SQL_ROWS} wierszy z {len(rows)}.")
+        rows = rows[:MAX_SQL_ROWS]
+
+    return {
+        "format": "SQL",
+        "headers": headers,
+        "rows": rows,
+        "notes": [f"Źródło SQL: {server} / {database}", *notes],
+        "source": {
+            "server": server,
+            "database": database,
+            "module": module_code,
+            "period": period,
+        },
+    }
+
+
+def available_data(payload: dict[str, Any]) -> dict[str, Any]:
+    server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
+    database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    _, rows = run_sqlcmd_table(
+        build_available_data_sql(),
+        SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path),
+    )
+    return {
+        "server": server,
+        "database": database,
+        "modules": rows,
     }
 
 

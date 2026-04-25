@@ -4,8 +4,9 @@ export function createInitialState() {
     rows: [],
     issues: [],
     mapping: {},
+    backups: [],
+    availableData: [],
     format: "-",
     fileName: "",
   };
 }
-

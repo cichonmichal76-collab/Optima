@@ -18,14 +18,42 @@
       </div>
 
       <nav class="nav-tabs" aria-label="Widoki aplikacji">
-        <button class="nav-tab is-active" data-view="audit">Audyt</button>
+        <button class="nav-tab is-active" data-view="database">Baza</button>
+        <button class="nav-tab" data-view="audit">Audyt</button>
         <button class="nav-tab" data-view="mapping">Mapowanie</button>
         <button class="nav-tab" data-view="schema">Schemat</button>
         <button class="nav-tab" data-view="report">Raport</button>
       </nav>
 
       <section class="side-section">
-        <label for="dataKind">Typ danych</label>
+        <label>Baza SQL .BAK/.BAC</label>
+        <input id="sqlServer" type="text" value=".\SQLEXPRESS02" aria-label="Serwer SQL">
+        <input id="backupPath" type="text" placeholder="F:\moja_baza.bak albo .bac" aria-label="Ścieżka backupu">
+        <select id="backupSelect" aria-label="Wykryte backupy">
+          <option value="">Wykryte backupy...</option>
+        </select>
+        <button id="scanBackups" class="plain-button" type="button">Skanuj dyski</button>
+        <button id="inspectBackup" class="plain-button" type="button">Sprawdź backup</button>
+        <button id="connectBackup" class="primary-button" type="button">Podłącz kopię</button>
+        <div class="file-meta" id="backupMeta">Wskaż plik backupu SQL bez uploadu do przeglądarki.</div>
+      </section>
+
+      <section class="side-section">
+        <label for="sqlDatabase">Baza robocza</label>
+        <input id="sqlDatabase" type="text" value="OptimaAudit_Firma_202603" aria-label="Baza SQL">
+        <input id="sqlPeriod" type="text" value="202603" inputmode="numeric" aria-label="Okres RRRRMM">
+        <button id="refreshDataCatalog" class="plain-button" type="button">Odśwież dostępne dane</button>
+      </section>
+
+      <section class="side-section data-catalog">
+        <label>Dostępne dane</label>
+        <div id="availableDataList" class="available-data-list">
+          <div class="available-card is-empty">Najpierw podłącz lub wybierz bazę roboczą.</div>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <label for="dataKind">Typ danych do ręcznego pobrania</label>
         <select id="dataKind">
           <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
           <option value="VAT_SALE">Rejestr VAT sprzedaz</option>
@@ -33,18 +61,17 @@
           <option value="ACCOUNT_PLAN">Plan kont</option>
           <option value="SETTLEMENTS">Rozrachunki</option>
           <option value="BANK">Bank / kasa</option>
-          <option value="JPK_XML">JPK XML</option>
-          <option value="OPTIMA_SCHEMA_XML">Schemat XML</option>
+          <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
+          <option value="CONTRACTORS">Kontrahenci</option>
+          <option value="DOCUMENTS">Dokumenty i załączniki</option>
+          <option value="FIXED_ASSETS">Środki trwałe</option>
+          <option value="HR_PAYROLL">Kadry i płace</option>
         </select>
       </section>
 
       <section class="side-section">
-        <label>SQL Optima</label>
-        <input id="sqlServer" type="text" value=".\SQLEXPRESS02" aria-label="Serwer SQL">
-        <input id="sqlDatabase" type="text" value="OptimaAudit_Firma_202603" aria-label="Baza SQL">
-        <input id="sqlPeriod" type="text" value="202603" inputmode="numeric" aria-label="Okres RRRRMM">
         <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
-        <div class="file-meta" id="sqlMeta">Gotowe do pobrania z kopii read-only.</div>
+        <div class="file-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
       </section>
 
       <section class="side-section">
@@ -62,8 +89,8 @@
     <main class="workspace">
       <header class="topbar">
         <div>
-          <h2 id="viewTitle">Audyt</h2>
-          <p id="viewSubtitle">Import, podglad i szybka walidacja eksportu.</p>
+          <h2 id="viewTitle">Baza SQL</h2>
+          <p id="viewSubtitle">Podłączenie lokalnej kopii Optimy z pliku BAK/BAC.</p>
         </div>
         <div class="status-strip">
           <span id="formatBadge">Format: -</span>
@@ -72,7 +99,32 @@
         </div>
       </header>
 
-      <section class="view is-active" id="view-audit">
+      <section class="view is-active" id="view-database">
+        <div class="split-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Podłączenie backupu SQL</h3>
+              <span class="muted">read-only</span>
+            </div>
+            <p class="disclaimer">
+              Plik .BAK/.BAC jest odtwarzany lokalnie do bazy roboczej i ustawiany jako tylko do odczytu.
+              Dla dużych plików podawana jest ścieżka na dysku, bez przesyłania backupu przez przeglądarkę.
+            </p>
+            <pre id="backupInfo">Wybierz lub wpisz ścieżkę backupu, potem kliknij „Sprawdź backup”.</pre>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Dane wykryte w bazie</h3>
+              <button id="refreshDataCatalogPanel" class="plain-button" type="button">Odśwież</button>
+            </div>
+            <div id="databaseDataList" class="available-data-grid">
+              <div class="available-card is-empty">Brak danych do pokazania.</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-audit">
         <div class="metrics-grid">
           <div class="metric critical"><span>Critical</span><strong id="criticalCount">0</strong></div>
           <div class="metric warning"><span>Warning</span><strong id="warningCount">0</strong></div>

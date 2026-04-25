@@ -5,8 +5,11 @@ export const FIELDS_BY_KIND = {
   ACCOUNT_PLAN: ["account_number", "name", "account_type", "is_active", "jpk_s_12_1"],
   SETTLEMENTS: ["document_number", "contractor_name", "contractor_nip", "due_date", "payment_date", "amount", "paid_amount", "remaining_amount", "account", "status"],
   BANK: ["document_number", "operation_date", "description", "amount", "contractor_name", "account", "status"],
-  JPK_XML: ["document_number", "contractor_nip", "contractor_name", "net", "vat", "gross"],
-  OPTIMA_SCHEMA_XML: ["name", "condition", "account", "amount_expression"],
+  JPK_DECLARATIONS: [],
+  CONTRACTORS: ["contractor_name", "contractor_nip", "account", "status"],
+  DOCUMENTS: ["document_number", "issue_date", "description", "status"],
+  FIXED_ASSETS: ["document_number", "issue_date", "description", "account", "amount", "status"],
+  HR_PAYROLL: [],
 };
 
 export const REQUIRED_BY_KIND = {
@@ -97,7 +100,7 @@ export const FIELD_HELP_TEXTS = {
 };
 
 export const ALIASES = {
-  document_number: ["nr dokumentu", "numer dokumentu", "numer dowodu", "nr dowodu", "dokument", "dowod", "dowod ksiegowy", "dowod sprzedazy", "dowod zakupu"],
+  document_number: ["nr dokumentu", "numer dokumentu", "numer dowodu", "nr dowodu", "dokument", "dowod", "dowod ksiegowy", "dowod sprzedazy", "dowod zakupu", "numer zapisu"],
   issue_date: ["data wystawienia", "data dokumentu", "data faktury"],
   receipt_date: ["data wplywu", "data otrzymania"],
   contractor_name: ["kontrahent", "nazwa kontrahenta", "nazwa dostawcy", "nazwa podmiotu", "podmiot", "nazwa", "firma"],
@@ -119,7 +122,7 @@ export const ALIASES = {
   account_number: ["konto", "numer konta", "nr konta"],
   name: ["nazwa konta", "nazwa"],
   account_type: ["typ konta", "rodzaj konta"],
-  amount: ["kwota", "wartosc"],
+  amount: ["kwota", "wartosc", "wartosc bilansowa", "wartosc kosztowa"],
   paid_amount: ["zaplacono", "kwota zaplacona"],
   remaining_amount: ["pozostalo", "saldo", "kwota pozostala"],
   due_date: ["termin platnosci"],
@@ -198,6 +201,7 @@ export const TEMPLATES = {
 };
 
 export const VIEW_TITLES = {
+  database: ["Baza SQL", "Podłączenie lokalnej kopii Optimy z pliku BAK/BAC."],
   audit: ["Audyt", "Import, podglad i szybka walidacja eksportu."],
   mapping: ["Mapowanie", "Dopasowanie kolumn z pliku do modelu kanonicznego."],
   schema: ["Schemat", "Projekt dekretow bez importu do Optimy."],
