@@ -25,6 +25,7 @@ body {
   font-family: "Segoe UI", Tahoma, sans-serif;
   background: var(--bg);
   color: var(--ink);
+  overflow-x: hidden;
 }
 
 button,
@@ -35,8 +36,9 @@ select {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
   min-height: 100vh;
+  min-width: 0;
 }
 
 .sidebar {
@@ -44,15 +46,22 @@ select {
   flex-direction: column;
   gap: 18px;
   min-height: 100vh;
+  min-width: 0;
   padding: 22px;
   background: linear-gradient(180deg, #16241f 0%, #152922 100%);
   color: #f6fbf8;
+  overflow: hidden;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.brand > div {
+  min-width: 0;
 }
 
 .brand-mark {
@@ -90,6 +99,7 @@ select {
 }
 
 .side-section-database {
+  min-width: 0;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
@@ -105,6 +115,16 @@ select {
   display: grid;
   gap: 2px;
   margin-bottom: 4px;
+  min-width: 0;
+}
+
+.side-heading strong,
+#sidebarDatabaseName {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  line-height: 1.25;
 }
 
 .eyebrow {
@@ -246,6 +266,7 @@ input[type="date"] {
 .workspace {
   min-width: 0;
   padding: 24px;
+  overflow: hidden;
 }
 
 .topbar {
@@ -253,6 +274,7 @@ input[type="date"] {
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 20px;
+  min-width: 0;
 }
 
 .topbar-db,
@@ -266,11 +288,15 @@ input[type="date"] {
 .topbar-db {
   min-width: 0;
   padding: 18px 20px;
+  overflow: hidden;
 }
 
 .topbar h2 {
-  font-size: 26px;
+  max-width: 100%;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.15;
   overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .topbar p {
@@ -297,9 +323,10 @@ input[type="date"] {
 
 .time-filter-bar {
   display: grid;
-  grid-template-columns: minmax(110px, 0.7fr) minmax(150px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) auto auto;
+  grid-template-columns: minmax(110px, 0.75fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(110px, auto) minmax(132px, auto);
   gap: 10px;
   align-items: end;
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -311,7 +338,12 @@ input[type="date"] {
 .preview-toolbar label {
   display: grid;
   gap: 5px;
+  min-width: 0;
   color: var(--muted);
+}
+
+.time-filter-bar button {
+  white-space: nowrap;
 }
 
 .time-filter-meta {
@@ -323,6 +355,7 @@ input[type="date"] {
 .report-shell {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .report-hero {
@@ -630,6 +663,14 @@ pre {
 }
 
 @media (max-width: 1380px) {
+  .time-filter-bar {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+  }
+
+  .time-filter-bar button {
+    min-width: 0;
+  }
+
   .report-meta-grid,
   .metrics-grid,
   .report-layout {
