@@ -13,6 +13,26 @@ export function escapeHtml(value) {
 
 export function normalizeHeader(value) {
   return String(value || "")
+    .replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => ({
+      "ą": "a",
+      "ć": "c",
+      "ę": "e",
+      "ł": "l",
+      "ń": "n",
+      "ó": "o",
+      "ś": "s",
+      "ź": "z",
+      "ż": "z",
+      "Ą": "a",
+      "Ć": "c",
+      "Ę": "e",
+      "Ł": "l",
+      "Ń": "n",
+      "Ó": "o",
+      "Ś": "s",
+      "Ź": "z",
+      "Ż": "z",
+    }[char]))
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -41,4 +61,3 @@ export function download(name, type, content) {
   link.click();
   URL.revokeObjectURL(url);
 }
-

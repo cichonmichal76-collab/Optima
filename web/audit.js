@@ -91,14 +91,20 @@ function auditLedger(rows, mapping) {
   const issues = [];
   const grouped = new Map();
   const records = rows.map((row) => {
+    const amountWn = parseAmount(mapped(row, "amount_wn", mapping));
+    const amountMa = parseAmount(mapped(row, "amount_ma", mapping));
+    const mainAccount = mapped(row, "account", mapping);
+    const oppositeAccount = mapped(row, "account_opposite", mapping);
+    const explicitAccountWn = mapped(row, "account_wn", mapping);
+    const explicitAccountMa = mapped(row, "account_ma", mapping);
     const record = {
       document: mapped(row, "document_number", mapping),
       contractor: mapped(row, "contractor_name", mapping),
       description: mapped(row, "description", mapping),
-      accountWn: mapped(row, "account_wn", mapping),
-      accountMa: mapped(row, "account_ma", mapping),
-      amountWn: parseAmount(mapped(row, "amount_wn", mapping)),
-      amountMa: parseAmount(mapped(row, "amount_ma", mapping)),
+      accountWn: explicitAccountWn || deriveWnAccount(mainAccount, oppositeAccount, amountWn, amountMa),
+      accountMa: explicitAccountMa || deriveMaAccount(mainAccount, oppositeAccount, amountWn, amountMa),
+      amountWn,
+      amountMa,
     };
     if (!grouped.has(record.document)) grouped.set(record.document, []);
     grouped.get(record.document).push(record);
@@ -123,3 +129,14 @@ function auditLedger(rows, mapping) {
   return { issues, records };
 }
 
+function deriveWnAccount(mainAccount, oppositeAccount, amountWn, amountMa) {
+  if (amountWn) return mainAccount;
+  if (amountMa) return oppositeAccount;
+  return mainAccount;
+}
+
+function deriveMaAccount(mainAccount, oppositeAccount, amountWn, amountMa) {
+  if (amountMa) return mainAccount;
+  if (amountWn) return oppositeAccount;
+  return oppositeAccount;
+}

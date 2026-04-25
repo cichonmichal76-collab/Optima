@@ -9,6 +9,30 @@ from typing import Any
 from dateutil import parser
 
 
+POLISH_TRANSLATION = str.maketrans(
+    {
+        "ą": "a",
+        "ć": "c",
+        "ę": "e",
+        "ł": "l",
+        "ń": "n",
+        "ó": "o",
+        "ś": "s",
+        "ź": "z",
+        "ż": "z",
+        "Ą": "a",
+        "Ć": "c",
+        "Ę": "e",
+        "Ł": "l",
+        "Ń": "n",
+        "Ó": "o",
+        "Ś": "s",
+        "Ź": "z",
+        "Ż": "z",
+    }
+)
+
+
 def normalize_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -20,6 +44,7 @@ def normalize_text(value: Any) -> str | None:
 
 def normalize_header(value: Any) -> str:
     text = normalize_text(value) or ""
+    text = text.translate(POLISH_TRANSLATION)
     text = unicodedata.normalize("NFKD", text)
     text = "".join(char for char in text if not unicodedata.combining(char))
     text = text.lower()
@@ -88,4 +113,3 @@ def normalize_bool(value: Any) -> bool | None:
     if text in {"0", "false", "nie", "no", "n", "inactive", "nieaktywny"}:
         return False
     return None
-

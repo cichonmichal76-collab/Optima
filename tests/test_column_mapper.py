@@ -31,3 +31,30 @@ def test_column_mapper_reports_missing_required_fields():
 
     assert set(missing) == {"account_ma", "amount_wn", "amount_ma"}
 
+
+def test_column_mapper_handles_optima_ledger_export_headers():
+    mapper = ColumnMapper()
+    headers = [
+        "Nr dziennika",
+        "Data księgowania",
+        "Data operacji",
+        "Dokument",
+        "Konto",
+        "Konto przeciw.",
+        "Kwota Wn",
+        "Kwota Ma",
+        "Opis",
+        "Nazwa podmiotu",
+    ]
+
+    mapping = mapper.auto_map(headers, DataKind.LEDGER)
+
+    assert mapping["document_number"] == "Dokument"
+    assert mapping["accounting_date"] == "Data księgowania"
+    assert mapping["operation_date"] == "Data operacji"
+    assert mapping["account_wn"] == "Konto"
+    assert mapping["account_ma"] == "Konto przeciw."
+    assert mapping["amount_wn"] == "Kwota Wn"
+    assert mapping["amount_ma"] == "Kwota Ma"
+    assert mapping["contractor_name"] == "Nazwa podmiotu"
+    assert mapper.validate_mapping(DataKind.LEDGER, mapping) == []

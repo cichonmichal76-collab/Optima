@@ -104,6 +104,8 @@ class ColumnMapper:
             field_name = self._lookup.get(normalized_header_name)
             if field_name and field_name in self.fields_for_kind(data_kind) and field_name not in mapping:
                 mapping[field_name] = original_header
+        if data_kind == DataKind.LEDGER:
+            self._map_optima_ledger_accounts(normalized_to_original, mapping)
         return mapping
 
     def validate_mapping(self, data_kind: DataKind, mapping: dict[str, str]) -> list[str]:
@@ -116,3 +118,15 @@ class ColumnMapper:
             result[target_field] = row.get(source_column)
         return result
 
+    @staticmethod
+    def _map_optima_ledger_accounts(normalized_to_original: dict[str, str], mapping: dict[str, str]) -> None:
+        main_account = normalized_to_original.get("konto")
+        opposite_account = (
+            normalized_to_original.get("konto_przeciw")
+            or normalized_to_original.get("konto_przeciwstawne")
+            or normalized_to_original.get("konto_przeciwne")
+        )
+        if main_account and "account_wn" not in mapping:
+            mapping["account_wn"] = main_account
+        if opposite_account and "account_ma" not in mapping:
+            mapping["account_ma"] = opposite_account
