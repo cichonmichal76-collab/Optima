@@ -13,3 +13,7 @@ def test_decode_sqlcmd_bytes_handles_utf16_bom():
     payload = "Numer dokumentu\r\nFV/1\r\n".encode("utf-16")
 
     assert decode_sqlcmd_bytes(payload).startswith("Numer dokumentu")
+
+
+def test_decode_sqlcmd_bytes_handles_polish_oem_codepage():
+    assert decode_sqlcmd_bytes("Dekrety księgowe".encode("cp852")) == "Dekrety księgowe"

@@ -94,7 +94,9 @@ def find_sqlcmd(explicit_path: str | None = None) -> str:
 def decode_sqlcmd_bytes(payload: bytes) -> str:
     if payload.startswith((b"\xff\xfe", b"\xfe\xff")):
         return payload.decode("utf-16")
-    for encoding in ("utf-8-sig", "mbcs", "utf-16le"):
+    # Hidden SQLCMD processes on Polish Windows can emit OEM CP852, while
+    # interactive runs often emit UTF-8. Try both before the ANSI fallback.
+    for encoding in ("utf-8-sig", "cp852", "mbcs", "utf-16le"):
         try:
             return payload.decode(encoding)
         except UnicodeDecodeError:
