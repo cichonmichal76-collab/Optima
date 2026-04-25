@@ -1211,6 +1211,10 @@ function defaultYearFromDatabase(years) {
   return years.find((year) => Number(year) <= currentYearNumber) || years[0] || "";
 }
 
+function defaultMonthValue() {
+  return "03";
+}
+
 async function loadActiveReportData(state) {
   const report = getCurrentReport(state);
   if (!report?.queryKey) {
@@ -1337,8 +1341,8 @@ async function applyTimeFilter(state) {
 }
 
 async function clearTimeFilters(state) {
-  $("#filterYear").value = "";
-  $("#filterMonth").value = "";
+  $("#filterYear").value = defaultYearFromDatabase(state.availableYears || []);
+  $("#filterMonth").value = defaultMonthValue();
   $("#filterDateFrom").value = "";
   $("#filterDateTo").value = "";
   await applyTimeFilter(state);
