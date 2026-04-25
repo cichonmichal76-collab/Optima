@@ -43,7 +43,7 @@ select {
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   min-height: 100vh;
   height: 100vh;
@@ -114,6 +114,15 @@ select {
   overflow: hidden;
 }
 
+.side-menu {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .side-heading {
   display: grid;
   gap: 2px;
@@ -179,7 +188,10 @@ input[type="date"] {
 
 .plain-button,
 .primary-button,
-.report-nav-item {
+.report-nav-item,
+.side-menu-card,
+.side-menu-group-head,
+.side-child-item {
   min-height: 40px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -211,6 +223,95 @@ input[type="date"] {
   max-height: 100%;
   overflow: auto;
   padding-right: 4px;
+}
+
+.side-menu-card,
+.side-menu-group {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.side-menu-card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 14px;
+  color: #f6fbf8;
+  text-align: left;
+}
+
+.side-menu-card:hover,
+.side-menu-group-head:hover,
+.side-child-item:hover {
+  border-color: rgba(154, 217, 197, 0.7);
+}
+
+.side-menu-card.is-active,
+.side-menu-group.is-active {
+  border-color: rgba(154, 217, 197, 0.8);
+  background: rgba(231, 248, 241, 0.12);
+}
+
+.side-menu-title {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.side-menu-meta {
+  color: #bfd3cb;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.side-menu-group {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.side-menu-group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  color: #f6fbf8;
+  text-align: left;
+}
+
+.side-menu-group-head span {
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.side-menu-group-head strong {
+  color: #8ee4c8;
+  font-size: 12px;
+}
+
+.side-submenu {
+  display: grid;
+  gap: 6px;
+}
+
+.side-child-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f6fbf8;
+  text-align: left;
+}
+
+.side-child-item.is-active {
+  border-color: rgba(154, 217, 197, 0.9);
+  background: #e7f8f1;
+  color: #123a31;
 }
 
 .report-group {
@@ -270,7 +371,8 @@ input[type="date"] {
 .workspace {
   min-width: 0;
   padding: 24px;
-  overflow: hidden;
+  max-height: 100vh;
+  overflow: auto;
 }
 
 .topbar {
@@ -359,6 +461,78 @@ input[type="date"] {
   display: grid;
   gap: 18px;
   min-width: 0;
+}
+
+.app-view {
+  display: none;
+  min-width: 0;
+}
+
+.app-view.is-active {
+  display: grid;
+  gap: 18px;
+}
+
+.start-hero {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+}
+
+.start-hero h3 {
+  font-size: clamp(26px, 3vw, 40px);
+}
+
+.start-hero p,
+.start-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.start-grid,
+.communication-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.start-card {
+  display: grid;
+  gap: 8px;
+  min-height: 160px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(23, 107, 91, 0.13), transparent 36%),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.start-card strong {
+  font-size: 20px;
+}
+
+.communication-grid {
+  grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr);
+}
+
+.connection-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.connection-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.connection-form label {
+  grid-column: 1 / -1;
+  color: var(--muted);
 }
 
 .report-data-panel {
@@ -498,6 +672,10 @@ input[type="date"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
+}
+
+.report-layout > .panel:only-child {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -660,7 +838,9 @@ pre {
 
   .report-meta-grid,
   .metrics-grid,
-  .report-layout {
+  .report-layout,
+  .start-grid,
+  .communication-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -675,14 +855,18 @@ pre {
     min-height: auto;
   }
 
-  .report-sidebar {
+  .report-sidebar,
+  .side-menu {
     max-height: 420px;
   }
 
   .time-filter-bar,
   .report-meta-grid,
   .metrics-grid,
-  .report-layout {
+  .report-layout,
+  .start-grid,
+  .communication-grid,
+  .connection-form {
     grid-template-columns: 1fr;
   }
 

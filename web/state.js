@@ -10,6 +10,7 @@ export function createInitialState() {
     backups: [],
     availableData: [],
     currentModule: "",
+    currentView: "start",
     currentReportKey: "package-status",
     format: "-",
     fileName: "",

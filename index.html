@@ -17,28 +17,7 @@
         </div>
       </div>
 
-      <section class="side-section side-section-database">
-        <div class="side-heading">
-          <span class="eyebrow eyebrow-sidebar">Źródło danych</span>
-          <strong id="sidebarDatabaseName">Brak bazy</strong>
-        </div>
-        <label for="backupDirectory">Wgraj plik</label>
-        <input id="backupDirectory" type="text" value="F:\" placeholder="Wskaż katalog, np. F:\" aria-label="Katalog z backupem SQL">
-        <input id="backupPath" type="hidden">
-        <input id="sqlServer" type="hidden" value=".\SQLEXPRESS02">
-        <input id="sqlDatabase" type="hidden" value="">
-        <button id="scanBackups" class="plain-button" type="button">Wgraj plik</button>
-        <button id="connectBackup" class="primary-button" type="button" disabled>Podłącz</button>
-        <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
-      </section>
-
-      <section class="side-section report-nav-section">
-        <div class="side-heading">
-          <span class="eyebrow eyebrow-sidebar">Hierarchia raportów</span>
-          <strong>Raporty i kontrole</strong>
-        </div>
-        <nav id="reportSidebar" class="report-sidebar" aria-label="Raporty tematyczne"></nav>
-      </section>
+      <nav id="sideMenu" class="side-menu" aria-label="Główne menu aplikacji"></nav>
     </aside>
 
     <main class="workspace">
@@ -49,7 +28,7 @@
           <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz raport, który ma odpowiedzieć, co blokuje zamknięcie miesiąca.</p>
           <div class="status-strip">
             <span id="recordBadge">Źródła: 0</span>
-            <span id="selectedReportBadge">Raport: Status paczki danych</span>
+            <span id="selectedReportBadge">Widok: START</span>
           </div>
         </div>
 
@@ -90,7 +69,78 @@
         </div>
       </header>
 
-      <section class="report-shell">
+      <section id="viewStart" class="app-view start-view is-active" aria-labelledby="startTitle">
+        <section class="panel start-hero">
+          <span class="eyebrow">START</span>
+          <h3 id="startTitle">Strona startowa</h3>
+          <p>
+            Ten widok jest punktem wejścia: najpierw komunikacja z bazą, potem raporty nadrzędne,
+            paczki zamknięcia oraz schematy i dekretacja.
+          </p>
+        </section>
+
+        <section class="start-grid" aria-label="Skróty startowe">
+          <article class="start-card">
+            <span class="meta-label">Krok 1</span>
+            <strong>Komunikacja</strong>
+            <p>Podłącz backup SQL i sprawdź, jakie pewne dane wykryliśmy w bazie.</p>
+          </article>
+          <article class="start-card">
+            <span class="meta-label">Krok 2</span>
+            <strong>Dashboardy nadrzędne</strong>
+            <p>Zobacz status paczek, blokady, VAT, KSeF, bank i obraz zarządczy.</p>
+          </article>
+          <article class="start-card">
+            <span class="meta-label">Krok 3</span>
+            <strong>Schematy i dekretacja</strong>
+            <p>Przejdź do kontroli automatyzacji księgowań i ręcznych dekretów.</p>
+          </article>
+        </section>
+      </section>
+
+      <section id="viewCommunication" class="app-view communication-view" aria-labelledby="communicationTitle">
+        <div class="communication-grid">
+          <section class="panel connection-panel">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Komunikacja</span>
+                <h3 id="communicationTitle">Podłączanie bazy SQL</h3>
+              </div>
+              <span class="muted">read-only</span>
+            </div>
+            <p class="disclaimer">
+              Wskaż katalog z backupem .BAK/.BAC, kliknij „Wgraj plik”, a potem „Podłącz”.
+              Program odtwarza lokalną kopię read-only bez zapisu do Optimy.
+            </p>
+            <div class="connection-form">
+              <label for="backupDirectory">Wgraj plik</label>
+              <input id="backupDirectory" type="text" value="F:\" placeholder="Wskaż katalog, np. F:\" aria-label="Katalog z backupem SQL">
+              <input id="backupPath" type="hidden">
+              <input id="sqlServer" type="hidden" value=".\SQLEXPRESS02">
+              <input id="sqlDatabase" type="hidden" value="">
+              <button id="scanBackups" class="plain-button" type="button">Wgraj plik</button>
+              <button id="connectBackup" class="primary-button" type="button" disabled>Podłącz</button>
+            </div>
+            <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
+            <pre id="backupInfo">Status: oczekuję na wskazanie katalogu.</pre>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Komunikacja</span>
+                <h3>Dane wykryte w bazie</h3>
+              </div>
+              <button id="refreshDataCatalogPanel" class="plain-button" type="button">Odśwież</button>
+            </div>
+            <div id="databaseDataList" class="available-data-grid">
+              <div class="available-card is-empty">Brak danych do pokazania.</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="viewReport" class="app-view report-shell" aria-labelledby="reportTitle">
         <section class="panel report-hero">
           <div class="panel-head report-hero-head">
             <div>
@@ -163,28 +213,7 @@
             </div>
             <div class="stack-list" id="reportAlerts"></div>
           </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <h3>Dane wykryte w bazie</h3>
-              <button id="refreshDataCatalogPanel" class="plain-button" type="button">Odśwież</button>
-            </div>
-            <div id="databaseDataList" class="available-data-grid">
-              <div class="available-card is-empty">Brak danych do pokazania.</div>
-            </div>
-          </section>
         </div>
-
-        <section class="panel operational-panel">
-          <div class="panel-head">
-            <h3>Status podłączenia backupu SQL</h3>
-            <span class="muted">read-only</span>
-          </div>
-          <p class="disclaimer">
-            Backup pozostaje operacją techniczną. Główna praca odbywa się na raportach, ale tutaj zawsze widać stan podłączenia bazy i ewentualny błąd odtworzenia.
-          </p>
-          <pre id="backupInfo">Status: oczekuję na wskazanie katalogu.</pre>
-        </section>
       </section>
     </main>
   </div>

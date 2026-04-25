@@ -901,12 +901,15 @@ const REPORTS = REPORT_GROUPS.flatMap((group) =>
 );
 
 const REPORTS_BY_KEY = Object.fromEntries(REPORTS.map((report) => [report.key, report]));
+const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [group.id, group]));
+const SIDEBAR_GROUP_IDS = ["dashboards", "packages", "schemes"];
 
 export function initApp(state) {
-  renderReportSidebar(state);
+  renderSideMenu(state);
   bindEvents(state);
   renderActiveReport(state);
   renderReportData(state);
+  renderCurrentView(state);
   updateTimeFilterMeta();
   updateBadges(state);
 }
@@ -928,18 +931,39 @@ function bindEvents(state) {
     $(selector).addEventListener("change", updateTimeFilterMeta);
     $(selector).addEventListener("input", updateTimeFilterMeta);
   });
-  $("#reportSidebar").addEventListener("click", (event) => {
-    const item = event.target.closest("[data-report-key]");
-    if (!item) return;
-    selectReport(state, item.dataset.reportKey);
+  $("#sideMenu").addEventListener("click", (event) => {
+    const viewItem = event.target.closest("[data-view-key]");
+    if (viewItem) {
+      selectView(state, viewItem.dataset.viewKey);
+      return;
+    }
+
+    const groupItem = event.target.closest("[data-report-group]");
+    if (groupItem) {
+      const firstReport = REPORT_GROUPS_BY_ID[groupItem.dataset.reportGroup]?.reports?.[0];
+      if (firstReport) selectReport(state, firstReport.key);
+      return;
+    }
+
+    const reportItem = event.target.closest("[data-report-key]");
+    if (reportItem) selectReport(state, reportItem.dataset.reportKey);
   });
+}
+
+function selectView(state, viewKey) {
+  state.currentView = viewKey === "communication" ? "communication" : "start";
+  renderSideMenu(state);
+  renderCurrentView(state);
+  updateBadges(state);
 }
 
 function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
+  state.currentView = "report";
   state.currentReportKey = reportKey;
   clearReportData(state);
-  renderReportSidebar(state);
+  renderSideMenu(state);
+  renderCurrentView(state);
   renderActiveReport(state);
   updateBadges(state);
   loadActiveReportData(state);
@@ -1168,11 +1192,21 @@ function availableDataCard(item, report) {
 function updateBadges(state) {
   const databaseName = $("#sqlDatabase").value.trim() || "Brak podłączonej bazy";
   const report = getCurrentReport(state);
+  const view = state.currentView || "start";
   $("#connectedDatabaseName").textContent = databaseName;
-  $("#sidebarDatabaseName").textContent = databaseName;
   $("#recordBadge").textContent = `Źródła: ${activeModuleCount(state.availableData)}`;
-  $("#selectedReportBadge").textContent = `Raport: ${report?.title || "Brak raportu"}`;
-  $("#viewSubtitle").textContent = report?.question || "Wgraj backup, podłącz bazę i wybierz raport.";
+  if (view === "communication") {
+    $("#selectedReportBadge").textContent = "Widok: Komunikacja";
+    $("#viewSubtitle").textContent = "Podłącz backup SQL i sprawdź listę pewnych danych wykrytych w bazie.";
+    return;
+  }
+  if (view === "report") {
+    $("#selectedReportBadge").textContent = `Raport: ${report?.title || "Brak raportu"}`;
+    $("#viewSubtitle").textContent = report?.question || "Wybierz raport z menu po lewej.";
+    return;
+  }
+  $("#selectedReportBadge").textContent = "Widok: START";
+  $("#viewSubtitle").textContent = "Strona startowa: wybierz Komunikację albo przejdź do jednej z grup raportów.";
 }
 
 async function applyTimeFilter(state) {
@@ -1228,27 +1262,53 @@ function describeTimeFilter() {
   return "bez ograniczenia dat";
 }
 
-function renderReportSidebar(state) {
-  $("#reportSidebar").innerHTML = REPORT_GROUPS.map((group) => reportSidebarGroup(group, state.currentReportKey)).join("");
+function renderSideMenu(state) {
+  $("#sideMenu").innerHTML = [
+    sideViewItem("start", "START", "Strona startowa", state),
+    sideViewItem("communication", "Komunikacja", "Podłączanie bazy i wykryte dane", state),
+    ...SIDEBAR_GROUP_IDS.map((groupId) => sideReportGroup(REPORT_GROUPS_BY_ID[groupId], state)),
+  ].join("");
 }
 
-function reportSidebarGroup(group, currentReportKey) {
+function renderCurrentView(state) {
+  const activeView = state.currentView || "start";
+  [
+    ["start", "#viewStart"],
+    ["communication", "#viewCommunication"],
+    ["report", "#viewReport"],
+  ].forEach(([viewKey, selector]) => {
+    $(selector).classList.toggle("is-active", viewKey === activeView);
+  });
+}
+
+function sideViewItem(viewKey, title, description, state) {
+  const active = state.currentView === viewKey ? " is-active" : "";
   return `
-    <section class="report-group">
-      <header class="report-group-head">
-        <strong>${escapeHtml(group.title)}</strong>
-        <span>${group.reports.length}</span>
-      </header>
-      <div class="report-group-items">
-        ${group.reports.map((report) => reportSidebarItem(report, currentReportKey)).join("")}
+    <button type="button" class="side-menu-card${active}" data-view-key="${escapeHtml(viewKey)}">
+      <span class="side-menu-title">${escapeHtml(title)}</span>
+      <span class="side-menu-meta">${escapeHtml(description)}</span>
+    </button>`;
+}
+
+function sideReportGroup(group, state) {
+  if (!group) return "";
+  const groupActive = state.currentView === "report" && group.reports.some((report) => report.key === state.currentReportKey);
+  return `
+    <section class="side-menu-group${groupActive ? " is-active" : ""}">
+      <button type="button" class="side-menu-group-head" data-report-group="${escapeHtml(group.id)}">
+        <span>${escapeHtml(group.title)}</span>
+        <strong>${group.reports.length}</strong>
+      </button>
+      <div class="side-submenu">
+        ${group.reports.map((report) => sideReportItem(report, state)).join("")}
       </div>
     </section>`;
 }
 
-function reportSidebarItem(report, currentReportKey) {
-  const active = report.key === currentReportKey ? " is-active" : "";
+function sideReportItem(report, state) {
+  const active = state.currentView === "report" && report.key === state.currentReportKey ? " is-active" : "";
   return `
-    <button type="button" class="report-nav-item${active}" data-report-key="${escapeHtml(report.key)}">
+    <button type="button" class="side-child-item${active}" data-report-key="${escapeHtml(report.key)}">
       <span class="report-nav-title">${escapeHtml(report.title)}</span>
       <span class="report-nav-meta">${escapeHtml(report.priority)}</span>
     </button>`;
