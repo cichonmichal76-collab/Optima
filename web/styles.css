@@ -334,14 +334,39 @@ td {
 
 .mapping-row {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) minmax(140px, 1fr);
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: minmax(190px, 1fr) minmax(160px, 0.9fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.field-name {
+.mapping-row:last-child {
+  border-bottom: 0;
+}
+
+.field-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.field-label {
   color: var(--ink);
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.field-code {
+  color: #4f625b;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
 }
 
 .required {
@@ -394,6 +419,10 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+
   .topbar,
   .toolbar,
   .export-row {
@@ -404,4 +433,3 @@ pre {
     max-width: none;
   }
 }
-

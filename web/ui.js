@@ -1,4 +1,4 @@
-import { ALIASES, FIELDS_BY_KIND, REQUIRED_BY_KIND, VIEW_TITLES } from "./config.js";
+import { ALIASES, FIELD_HELP_TEXTS, FIELD_LABELS, FIELDS_BY_KIND, REQUIRED_BY_KIND, VIEW_TITLES } from "./config.js";
 import { buildSummary, runAudit } from "./audit.js";
 import { exportExcel, exportHtml, exportJson } from "./exporters.js";
 import { parseInputFile } from "./parsers.js";
@@ -87,12 +87,18 @@ function renderMapping(state) {
   const fields = FIELDS_BY_KIND[kind] || [];
   const required = REQUIRED_BY_KIND[kind] || new Set();
   $("#mappingFields").innerHTML = fields.map((field) => {
+    const label = FIELD_LABELS[field] || field;
+    const helpText = FIELD_HELP_TEXTS[field] || "Pole używane przez wewnętrzny model aplikacji.";
     const options = ["", ...state.headers].map((header) => (
       `<option value="${escapeHtml(header)}" ${state.mapping[field] === header ? "selected" : ""}>${escapeHtml(header || "-")}</option>`
     )).join("");
     return `
       <div class="mapping-row">
-        <span class="field-name">${field}${required.has(field) ? ' <span class="required">*</span>' : ""}</span>
+        <div class="field-copy">
+          <span class="field-label">${escapeHtml(label)}${required.has(field) ? ' <span class="required">*</span>' : ""}</span>
+          <span class="field-help">${escapeHtml(helpText)}</span>
+          <span class="field-code">${escapeHtml(field)}</span>
+        </div>
         <select data-field="${field}">${options}</select>
       </div>`;
   }).join("");
@@ -198,4 +204,3 @@ function switchView(name) {
   $("#viewTitle").textContent = VIEW_TITLES[name][0];
   $("#viewSubtitle").textContent = VIEW_TITLES[name][1];
 }
-
