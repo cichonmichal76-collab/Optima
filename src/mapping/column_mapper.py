@@ -36,6 +36,8 @@ FIELDS_BY_KIND: dict[DataKind, list[str]] = {
         "accounting_date",
         "operation_date",
         "description",
+        "account",
+        "account_opposite",
         "account_wn",
         "account_ma",
         "amount_wn",
@@ -80,7 +82,7 @@ FIELDS_BY_KIND: dict[DataKind, list[str]] = {
 REQUIRED_FIELDS_BY_KIND: dict[DataKind, set[str]] = {
     DataKind.VAT_PURCHASE: {"document_number", "net", "vat", "gross"},
     DataKind.VAT_SALE: {"document_number", "net", "vat", "gross"},
-    DataKind.LEDGER: {"document_number", "account_wn", "account_ma", "amount_wn", "amount_ma"},
+    DataKind.LEDGER: {"document_number", "amount_wn", "amount_ma"},
     DataKind.ACCOUNT_PLAN: {"account_number"},
     DataKind.SETTLEMENTS: {"document_number", "amount"},
     DataKind.BANK: {"amount", "description"},
@@ -110,7 +112,20 @@ class ColumnMapper:
 
     def validate_mapping(self, data_kind: DataKind, mapping: dict[str, str]) -> list[str]:
         required = self.required_fields_for_kind(data_kind)
-        return [field_name for field_name in required if not mapping.get(field_name)]
+        missing = [field_name for field_name in required if not mapping.get(field_name)]
+        if data_kind == DataKind.LEDGER:
+            has_optima_accounts = bool(mapping.get("account") and mapping.get("account_opposite"))
+            has_explicit_sides = bool(mapping.get("account_wn") and mapping.get("account_ma"))
+            if not has_optima_accounts and not has_explicit_sides:
+                if mapping.get("account_wn") or mapping.get("account_ma"):
+                    for field_name in ("account_wn", "account_ma"):
+                        if not mapping.get(field_name):
+                            missing.append(field_name)
+                else:
+                    for field_name in ("account", "account_opposite"):
+                        if not mapping.get(field_name):
+                            missing.append(field_name)
+        return missing
 
     def apply_mapping(self, row: dict[str, object], mapping: dict[str, str]) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -120,13 +135,15 @@ class ColumnMapper:
 
     @staticmethod
     def _map_optima_ledger_accounts(normalized_to_original: dict[str, str], mapping: dict[str, str]) -> None:
+        # Optima exports "Konto" and "Konto przeciw." as account/opposite account,
+        # not as Wn/Ma sides. Only explicit Konto Wn/Konto Ma headers map to sides.
         main_account = normalized_to_original.get("konto")
         opposite_account = (
             normalized_to_original.get("konto_przeciw")
             or normalized_to_original.get("konto_przeciwstawne")
             or normalized_to_original.get("konto_przeciwne")
         )
-        if main_account and "account_wn" not in mapping:
-            mapping["account_wn"] = main_account
-        if opposite_account and "account_ma" not in mapping:
-            mapping["account_ma"] = opposite_account
+        if main_account and "account" not in mapping:
+            mapping["account"] = main_account
+        if opposite_account and "account_opposite" not in mapping:
+            mapping["account_opposite"] = opposite_account

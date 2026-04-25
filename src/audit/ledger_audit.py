@@ -25,10 +25,26 @@ class LedgerAudit:
 
         for record in records:
             grouped[record.document_number].append(record)
-            if not record.account_wn:
-                issues.append(self._issue("CRITICAL", record, "LEDGER_MISSING_WN", "Brak konta Wn.", "Uzupelnij konto Wn."))
-            if not record.account_ma:
-                issues.append(self._issue("CRITICAL", record, "LEDGER_MISSING_MA", "Brak konta Ma.", "Uzupelnij konto Ma."))
+            if not (record.account_wn or record.account):
+                issues.append(
+                    self._issue(
+                        "CRITICAL",
+                        record,
+                        "LEDGER_MISSING_WN",
+                        "Brak konta Wn albo konta zapisu.",
+                        "Uzupelnij konto Wn albo pole Konto z eksportu Optimy.",
+                    )
+                )
+            if not (record.account_ma or record.account_opposite):
+                issues.append(
+                    self._issue(
+                        "CRITICAL",
+                        record,
+                        "LEDGER_MISSING_MA",
+                        "Brak konta Ma albo konta przeciwstawnego.",
+                        "Uzupelnij konto Ma albo pole Konto przeciw. z eksportu Optimy.",
+                    )
+                )
             if record.amount_wn == 0 and record.amount_ma == 0:
                 issues.append(
                     self._issue(
@@ -62,7 +78,7 @@ class LedgerAudit:
                             confidence=0.85,
                         )
                     )
-            for account in (record.account_wn, record.account_ma):
+            for account in self._account_pool(record):
                 if account and plan_accounts and account not in plan_accounts:
                     issues.append(
                         self._issue(
@@ -74,7 +90,7 @@ class LedgerAudit:
                         )
                     )
             if vat_accounts and record.description and "vat" in record.description.lower():
-                account_pool = {value for value in (record.account_wn, record.account_ma) if value}
+                account_pool = self._account_pool(record)
                 if account_pool and not (account_pool & vat_accounts):
                     issues.append(
                         self._issue(
@@ -109,6 +125,14 @@ class LedgerAudit:
         return issues
 
     @staticmethod
+    def _account_pool(record: LedgerRecord) -> set[str]:
+        return {
+            value
+            for value in (record.account_wn, record.account_ma, record.account, record.account_opposite)
+            if value
+        }
+
+    @staticmethod
     def _issue(
         level: str,
         record: LedgerRecord,
@@ -128,4 +152,3 @@ class LedgerAudit:
             recommendation=recommendation,
             confidence=confidence,
         )
-

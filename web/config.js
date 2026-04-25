@@ -1,7 +1,7 @@
 export const FIELDS_BY_KIND = {
   VAT_PURCHASE: ["document_number", "issue_date", "receipt_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "vat_rate", "register_name"],
   VAT_SALE: ["document_number", "issue_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "vat_rate", "register_name"],
-  LEDGER: ["document_number", "accounting_date", "operation_date", "description", "account", "account_opposite", "amount_wn", "amount_ma", "journal", "contractor_name"],
+  LEDGER: ["document_number", "accounting_date", "operation_date", "description", "account", "account_opposite", "account_wn", "account_ma", "amount_wn", "amount_ma", "journal", "contractor_name"],
   ACCOUNT_PLAN: ["account_number", "name", "account_type", "is_active", "jpk_s_12_1"],
   SETTLEMENTS: ["document_number", "contractor_name", "contractor_nip", "due_date", "payment_date", "amount", "paid_amount", "remaining_amount", "account", "status"],
   BANK: ["document_number", "operation_date", "description", "amount", "contractor_name", "account", "status"],
@@ -12,7 +12,7 @@ export const FIELDS_BY_KIND = {
 export const REQUIRED_BY_KIND = {
   VAT_PURCHASE: new Set(["document_number", "net", "vat", "gross"]),
   VAT_SALE: new Set(["document_number", "net", "vat", "gross"]),
-  LEDGER: new Set(["document_number", "account", "account_opposite", "amount_wn", "amount_ma"]),
+  LEDGER: new Set(["document_number", "amount_wn", "amount_ma"]),
   ACCOUNT_PLAN: new Set(["account_number"]),
   SETTLEMENTS: new Set(["document_number", "amount"]),
   BANK: new Set(["amount", "description"]),

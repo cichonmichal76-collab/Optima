@@ -48,6 +48,8 @@ class LedgerRecord(BaseModel):
     accounting_date: dt_date | None = None
     operation_date: dt_date | None = None
     description: str | None = None
+    account: str | None = None
+    account_opposite: str | None = None
     account_wn: str | None = None
     account_ma: str | None = None
     amount_wn: Decimal = Decimal("0")

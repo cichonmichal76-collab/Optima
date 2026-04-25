@@ -93,16 +93,17 @@ function auditLedger(rows, mapping) {
   const records = rows.map((row) => {
     const amountWn = parseAmount(mapped(row, "amount_wn", mapping));
     const amountMa = parseAmount(mapped(row, "amount_ma", mapping));
+    // Do not infer Wn/Ma account sides from Optima's account/opposite columns.
     const mainAccount = mapped(row, "account", mapping);
     const oppositeAccount = mapped(row, "account_opposite", mapping);
-    const explicitAccountWn = mapped(row, "account_wn", mapping);
-    const explicitAccountMa = mapped(row, "account_ma", mapping);
     const record = {
       document: mapped(row, "document_number", mapping),
       contractor: mapped(row, "contractor_name", mapping),
       description: mapped(row, "description", mapping),
-      accountWn: explicitAccountWn || deriveWnAccount(mainAccount, oppositeAccount, amountWn, amountMa),
-      accountMa: explicitAccountMa || deriveMaAccount(mainAccount, oppositeAccount, amountWn, amountMa),
+      account: mainAccount,
+      accountOpposite: oppositeAccount,
+      accountWn: mapped(row, "account_wn", mapping),
+      accountMa: mapped(row, "account_ma", mapping),
       amountWn,
       amountMa,
     };
@@ -113,8 +114,8 @@ function auditLedger(rows, mapping) {
 
   records.forEach((record) => {
     const base = { area: "LEDGER", document: record.document, contractor: record.contractor };
-    if (!record.accountWn) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Wn.", recommendation: "Uzupelnij konto Wn." });
-    if (!record.accountMa) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Ma.", recommendation: "Uzupelnij konto Ma." });
+    if (!record.accountWn && !record.account) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Wn albo konta zapisu.", recommendation: "Uzupelnij mapowanie konta Wn albo pola Konto z Optimy." });
+    if (!record.accountMa && !record.accountOpposite) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Ma albo konta przeciwstawnego.", recommendation: "Uzupelnij mapowanie konta Ma albo pola Konto przeciw. z Optimy." });
     if (!record.amountWn && !record.amountMa) issues.push({ level: "CRITICAL", ...base, issue: "Puste kwoty Wn/Ma.", recommendation: "Sprawdz mapowanie kwot." });
     if (!record.description) issues.push({ level: "WARNING", ...base, issue: "Brak opisu ksiegowania.", recommendation: "Uzupelnij opis." });
   });
@@ -127,16 +128,4 @@ function auditLedger(rows, mapping) {
     }
   });
   return { issues, records };
-}
-
-function deriveWnAccount(mainAccount, oppositeAccount, amountWn, amountMa) {
-  if (amountWn) return mainAccount;
-  if (amountMa) return oppositeAccount;
-  return mainAccount;
-}
-
-function deriveMaAccount(mainAccount, oppositeAccount, amountWn, amountMa) {
-  if (amountMa) return mainAccount;
-  if (amountWn) return oppositeAccount;
-  return oppositeAccount;
 }

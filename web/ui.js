@@ -84,7 +84,7 @@ function autoMap(state) {
 function renderMapping(state) {
   const kind = $("#dataKind").value;
   const fields = FIELDS_BY_KIND[kind] || [];
-  const required = REQUIRED_BY_KIND[kind] || new Set();
+  const required = requiredFieldsForKind(kind, state.mapping);
   $("#mappingFields").innerHTML = fields.map((field) => {
     const label = FIELD_LABELS[field] || field;
     const helpText = FIELD_HELP_TEXTS[field] || "Pole używane przez wewnętrzny model aplikacji.";
@@ -153,13 +153,46 @@ function updateSummary(summary) {
 }
 
 function updateBadges(state) {
-  const required = REQUIRED_BY_KIND[$("#dataKind").value] || new Set();
-  const missing = [...required].filter((field) => !state.mapping[field]).length;
-  const fieldCount = (FIELDS_BY_KIND[$("#dataKind").value] || []).length;
+  const kind = $("#dataKind").value;
+  const missing = missingRequiredFields(kind, state.mapping).length;
+  const fieldCount = (FIELDS_BY_KIND[kind] || []).length;
   $("#formatBadge").textContent = `Format: ${state.format}`;
   $("#mappingBadge").textContent = `Mapowanie: ${missing ? `brakuje ${missing}` : "OK"}`;
   $("#recordBadge").textContent = `Wiersze: ${state.rows.length}`;
   $("#mappingCompleteness").textContent = `${Object.keys(state.mapping).length} / ${fieldCount}`;
+}
+
+function requiredFieldsForKind(kind, mapping = {}) {
+  const required = new Set(REQUIRED_BY_KIND[kind] || []);
+  if (kind === "LEDGER") {
+    if (mapping.account_wn || mapping.account_ma) {
+      required.add("account_wn");
+      required.add("account_ma");
+    } else {
+      required.add("account");
+      required.add("account_opposite");
+    }
+  }
+  return required;
+}
+
+function missingRequiredFields(kind, mapping) {
+  const baseRequired = REQUIRED_BY_KIND[kind] || new Set();
+  const missing = [...baseRequired].filter((field) => !mapping[field]);
+  if (kind === "LEDGER") {
+    const hasOptimaAccounts = mapping.account && mapping.account_opposite;
+    const hasExplicitSides = mapping.account_wn && mapping.account_ma;
+    if (!hasOptimaAccounts && !hasExplicitSides) {
+      if (mapping.account_wn || mapping.account_ma) {
+        if (!mapping.account_wn) missing.push("account_wn");
+        if (!mapping.account_ma) missing.push("account_ma");
+      } else {
+        if (!mapping.account) missing.push("account");
+        if (!mapping.account_opposite) missing.push("account_opposite");
+      }
+    }
+  }
+  return missing;
 }
 
 function updateReport(state) {

@@ -115,8 +115,11 @@ class VatAudit:
 
             if record.vat != 0 and ledger_by_document and vat_accounts:
                 matching_entries = ledger_by_document.get(record.document_number.strip(), [])
-                account_pool = {entry.account_wn for entry in matching_entries if entry.account_wn} | {
-                    entry.account_ma for entry in matching_entries if entry.account_ma
+                account_pool = {
+                    account
+                    for entry in matching_entries
+                    for account in (entry.account_wn, entry.account_ma, entry.account, entry.account_opposite)
+                    if account
                 }
                 if matching_entries and not (account_pool & vat_accounts):
                     issues.append(
@@ -165,4 +168,3 @@ class VatAudit:
             recommendation=recommendation,
             confidence=confidence,
         )
-

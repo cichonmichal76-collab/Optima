@@ -29,6 +29,8 @@ FIELD_ALIASES: dict[str, list[str]] = {
     "accounting_date": ["data ksiegowania", "data księgowania", "data zapisu"],
     "operation_date": ["data operacji"],
     "description": ["opis", "tresc", "treść"],
+    "account": ["konto rozrachunkowe"],
+    "account_opposite": ["konto przeciw", "konto przeciw.", "konto przeciwstawne", "konto przeciwne"],
     "account_wn": ["konto wn", "wn", "konto winien"],
     "account_ma": ["konto ma", "ma"],
     "amount_wn": ["kwota wn", "wn kwota"],
@@ -46,7 +48,6 @@ FIELD_ALIASES: dict[str, list[str]] = {
     "amount": ["kwota", "wartosc", "wartość"],
     "paid_amount": ["zaplacono", "zapłacono", "kwota zaplacona", "kwota zapłacona"],
     "remaining_amount": ["pozostalo", "pozostało", "saldo", "kwota pozostala", "kwota pozostała"],
-    "account": ["konto rozrachunkowe", "konto"],
     "status": ["status", "stan rozrachunku"],
 }
 
@@ -54,7 +55,7 @@ FIELD_ALIASES: dict[str, list[str]] = {
 DATA_KIND_SIGNALS: dict[DataKind, set[str]] = {
     DataKind.VAT_PURCHASE: {"netto", "vat", "brutto", "stawka vat", "rejestr"},
     DataKind.VAT_SALE: {"netto", "vat", "brutto", "stawka vat", "kontrahent"},
-    DataKind.LEDGER: {"konto wn", "konto ma", "kwota wn", "kwota ma"},
+    DataKind.LEDGER: {"konto", "konto przeciw", "kwota wn", "kwota ma"},
     DataKind.ACCOUNT_PLAN: {"numer konta", "nazwa konta", "typ konta"},
     DataKind.SETTLEMENTS: {"termin platnosci", "saldo", "zaplacono"},
     DataKind.BANK: {"opis", "kwota", "kontrahent"},

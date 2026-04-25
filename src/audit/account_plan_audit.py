@@ -60,7 +60,7 @@ class AccountPlanAudit:
                     )
             if record.is_active is False:
                 used = any(
-                    record.account_number in {ledger.account_wn, ledger.account_ma}
+                    record.account_number in self._record_accounts(ledger)
                     for ledger in ledger_records
                 )
                 if used:
@@ -101,5 +101,16 @@ class AccountPlanAudit:
                 accounts.add(record.account_wn)
             if record.account_ma:
                 accounts.add(record.account_ma)
+            if record.account:
+                accounts.add(record.account)
+            if record.account_opposite:
+                accounts.add(record.account_opposite)
         return accounts
 
+    @staticmethod
+    def _record_accounts(record: LedgerRecord) -> set[str]:
+        return {
+            account
+            for account in (record.account_wn, record.account_ma, record.account, record.account_opposite)
+            if account
+        }

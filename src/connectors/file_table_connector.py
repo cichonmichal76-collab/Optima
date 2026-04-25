@@ -134,6 +134,8 @@ class FileTableConnector(BaseConnector):
                 accounting_date=normalize_date(mapped_row.get("accounting_date")),
                 operation_date=normalize_date(mapped_row.get("operation_date")),
                 description=normalize_text(mapped_row.get("description")),
+                account=normalize_text(mapped_row.get("account")),
+                account_opposite=normalize_text(mapped_row.get("account_opposite")),
                 account_wn=normalize_text(mapped_row.get("account_wn")),
                 account_ma=normalize_text(mapped_row.get("account_ma")),
                 amount_wn=normalize_decimal(mapped_row.get("amount_wn"), Decimal("0")) or Decimal("0"),
@@ -174,4 +176,3 @@ class FileTableConnector(BaseConnector):
                 raw=raw_row,
             )
         return mapped_row
-
