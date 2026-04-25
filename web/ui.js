@@ -921,6 +921,8 @@ function bindEvents(state) {
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
+  $("#applyReportTimeFilter").addEventListener("click", () => applyReportTimeFilter(state));
+  $("#clearReportTimeFilters").addEventListener("click", () => clearTimeFilters(state));
   $("#sqlDatabase").addEventListener("change", () => {
     persistDatabase($("#sqlDatabase").value.trim());
     updateBadges(state);
@@ -932,8 +934,12 @@ function bindEvents(state) {
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
   $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
   ["#filterYear", "#filterMonth", "#filterDateFrom", "#filterDateTo"].forEach((selector) => {
-    $(selector).addEventListener("change", updateTimeFilterMeta);
-    $(selector).addEventListener("input", updateTimeFilterMeta);
+    $(selector).addEventListener("change", () => syncReportFiltersFromTopbar());
+    $(selector).addEventListener("input", () => syncReportFiltersFromTopbar());
+  });
+  ["#reportFilterYear", "#reportFilterMonth", "#reportFilterDateFrom", "#reportFilterDateTo"].forEach((selector) => {
+    $(selector).addEventListener("change", () => syncTopbarFiltersFromReport());
+    $(selector).addEventListener("input", () => syncTopbarFiltersFromReport());
   });
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
@@ -1196,11 +1202,13 @@ function renderYearOptions(state, selectedYear) {
   const years = state.availableYears || [];
   const fallback = selectedYear && !years.includes(selectedYear) ? [selectedYear] : [];
   const options = ["", ...fallback, ...years];
-  $("#filterYear").innerHTML = options.map((year) => {
+  const html = options.map((year) => {
     const label = year ? year : "Wszystkie lata";
     const selected = year === selectedYear ? " selected" : "";
     return `<option value="${escapeHtml(year)}"${selected}>${escapeHtml(label)}</option>`;
   }).join("");
+  $("#filterYear").innerHTML = html;
+  $("#reportFilterYear").innerHTML = html;
 }
 
 function defaultYearFromDatabase(years) {
@@ -1336,8 +1344,14 @@ function updateBadges(state) {
 
 async function applyTimeFilter(state) {
   updateTimeFilterMeta();
+  syncReportFiltersFromTopbar();
   await loadAvailableData(state);
   await loadActiveReportData(state);
+}
+
+async function applyReportTimeFilter(state) {
+  syncTopbarFiltersFromReport();
+  await applyTimeFilter(state);
 }
 
 async function clearTimeFilters(state) {
@@ -1367,7 +1381,25 @@ function getTimeFilterPayload() {
 }
 
 function updateTimeFilterMeta() {
-  $("#timeFilterMeta").textContent = `Filtr: ${describeTimeFilter()}`;
+  const description = describeTimeFilter();
+  $("#timeFilterMeta").textContent = `Filtr: ${description}`;
+  $("#reportFilterMeta").textContent = `Aktywny filtr: ${description}`;
+}
+
+function syncReportFiltersFromTopbar() {
+  $("#reportFilterYear").value = $("#filterYear").value;
+  $("#reportFilterMonth").value = $("#filterMonth").value;
+  $("#reportFilterDateFrom").value = $("#filterDateFrom").value;
+  $("#reportFilterDateTo").value = $("#filterDateTo").value;
+  updateTimeFilterMeta();
+}
+
+function syncTopbarFiltersFromReport() {
+  $("#filterYear").value = $("#reportFilterYear").value;
+  $("#filterMonth").value = $("#reportFilterMonth").value;
+  $("#filterDateFrom").value = $("#reportFilterDateFrom").value;
+  $("#filterDateTo").value = $("#reportFilterDateTo").value;
+  updateTimeFilterMeta();
 }
 
 function describeTimeFilter() {
@@ -1449,7 +1481,8 @@ function renderActiveReport(state) {
   $("#reportSummary").textContent = report.summary;
   $("#reportQuestion").textContent = report.question;
   $("#reportSources").textContent = report.sources.join(", ");
-  $("#reportFilters").textContent = report.filters.join(", ");
+  renderReportFilterChips(report);
+  syncReportFiltersFromTopbar();
   $("#reportPriority").textContent = `Priorytet: ${report.priority.toLowerCase()}`;
   $("#reportPriority").dataset.priority = report.priority.toLowerCase();
   $("#reportScopeMeta").textContent = `${report.controls.length} kontroli, ${report.layout.length} sekcji raportu`;
@@ -1538,6 +1571,12 @@ function stackItem(text, tone) {
     <article class="stack-item stack-item-${escapeHtml(tone)}">
       <span>${escapeHtml(text)}</span>
     </article>`;
+}
+
+function renderReportFilterChips(report) {
+  $("#reportFilterChips").innerHTML = report.filters
+    .map((filter) => `<span class="report-filter-chip">${escapeHtml(filter)}</span>`)
+    .join("");
 }
 
 function getCurrentReport(state) {

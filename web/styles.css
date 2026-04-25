@@ -617,6 +617,54 @@ input[type="date"] {
   background: var(--panel-soft);
 }
 
+.report-filter-card {
+  grid-column: 1 / -1;
+}
+
+.report-filter-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 10px;
+}
+
+.report-filter-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.report-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.report-filter-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.report-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-filter-chip {
+  border-radius: 999px;
+  background: #eaf3ef;
+  color: var(--accent-strong);
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .meta-label {
   color: var(--muted);
   font-size: 12px;
@@ -859,6 +907,7 @@ pre {
   }
 
   .report-meta-grid,
+  .report-filter-grid,
   .metrics-grid,
   .report-layout,
   .start-grid,
@@ -884,6 +933,7 @@ pre {
 
   .time-filter-bar,
   .report-meta-grid,
+  .report-filter-grid,
   .metrics-grid,
   .report-layout,
   .start-grid,
