@@ -207,14 +207,12 @@ async function loadAvailableData(state) {
     renderAvailableData(state);
   } catch (error) {
     const message = `<div class="available-card is-empty">Brak połączenia: ${escapeHtml(error.message)}</div>`;
-    $("#availableDataList").innerHTML = message;
     $("#databaseDataList").innerHTML = message;
   }
 }
 
 function renderNoDatabase() {
   const message = '<div class="available-card is-empty">Najpierw podłącz bazę.</div>';
-  $("#availableDataList").innerHTML = message;
   $("#databaseDataList").innerHTML = message;
 }
 
@@ -223,7 +221,6 @@ function renderAvailableData(state) {
   const html = modules.length
     ? modules.map((item) => availableDataCard(item)).join("")
     : '<div class="available-card is-empty">W tej bazie nie wykryto pewnych modułów do pobrania.</div>';
-  $("#availableDataList").innerHTML = html;
   $("#databaseDataList").innerHTML = html;
   $$(".available-card[data-module]").forEach((card) => {
     card.addEventListener("click", () => loadModuleData(state, card.dataset.module));

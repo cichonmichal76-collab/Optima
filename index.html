@@ -28,34 +28,6 @@
         <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
       </section>
 
-      <section class="side-section data-catalog">
-        <label>Dostępne dane</label>
-        <div id="availableDataList" class="available-data-list">
-          <div class="available-card is-empty">Najpierw podłącz bazę.</div>
-        </div>
-      </section>
-
-      <section class="side-section">
-        <label for="dataKind">Typ danych z SQL</label>
-        <select id="dataKind">
-          <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
-          <option value="VAT_SALE">Rejestr VAT sprzedaz</option>
-          <option value="LEDGER">Zapisy ksiegowe</option>
-          <option value="ACCOUNT_PLAN">Plan kont</option>
-          <option value="SETTLEMENTS">Rozrachunki</option>
-          <option value="BANK">Bank / kasa</option>
-          <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
-          <option value="CONTRACTORS">Kontrahenci</option>
-          <option value="DOCUMENTS">Dokumenty i załączniki</option>
-          <option value="FIXED_ASSETS">Środki trwałe</option>
-          <option value="HR_PAYROLL">Kadry i płace</option>
-        </select>
-      </section>
-
-      <section class="side-section">
-        <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
-        <div class="file-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
-      </section>
     </aside>
 
     <main class="workspace">
@@ -129,11 +101,31 @@
           </section>
         </div>
 
-          <section class="panel">
-            <div class="panel-head">
-              <h3>Podgląd danych</h3>
-              <span class="muted" id="previewMeta">Brak danych</span>
+          <section class="panel preview-panel">
+            <div class="panel-head panel-head-preview">
+              <div>
+                <h3>Podgląd danych</h3>
+                <span class="muted" id="previewMeta">Brak danych</span>
+              </div>
+              <div class="preview-toolbar">
+                <label for="dataKind">Typ danych z SQL</label>
+                <select id="dataKind">
+                  <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
+                  <option value="VAT_SALE">Rejestr VAT sprzedaz</option>
+                  <option value="LEDGER">Zapisy ksiegowe</option>
+                  <option value="ACCOUNT_PLAN">Plan kont</option>
+                  <option value="SETTLEMENTS">Rozrachunki</option>
+                  <option value="BANK">Bank / kasa</option>
+                  <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
+                  <option value="CONTRACTORS">Kontrahenci</option>
+                  <option value="DOCUMENTS">Dokumenty i załączniki</option>
+                  <option value="FIXED_ASSETS">Środki trwałe</option>
+                  <option value="HR_PAYROLL">Kadry i płace</option>
+                </select>
+                <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
+              </div>
             </div>
+            <div class="inline-meta" id="sqlMeta">Wybierz typ danych lub kafel powyżej.</div>
             <div class="table-wrap compact">
               <table>
                 <thead id="previewHead"></thead>
