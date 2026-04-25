@@ -1211,12 +1211,6 @@ function renderActiveReport(state) {
 function buildMetricCards(report, state) {
   const availableCount = moduleCount(report.primaryModule, state.availableData);
   const relatedCount = report.relatedModules.length;
-  const databaseReady = $("#sqlDatabase").value.trim();
-  const readiness = !databaseReady
-    ? "Brak bazy"
-    : availableCount > 0
-      ? "Źródło gotowe"
-      : "Brak źródła";
 
   return [
     { label: "Źródło główne", value: moduleLabel(report.primaryModule), tone: "info" },
@@ -1224,7 +1218,6 @@ function buildMetricCards(report, state) {
     { label: "Powiązane moduły", value: formatCount(relatedCount), tone: "info" },
     { label: "Kontrole", value: formatCount(report.controls.length), tone: "info" },
     { label: "Alerty / blokady", value: formatCount(report.alerts.length), tone: report.priority === "Krytyczny" ? "critical" : "warning" },
-    { label: "Gotowość raportu", value: readiness, tone: availableCount > 0 ? "success" : "warning" },
     { label: "Filtr czasu", value: describeTimeFilter(), tone: "neutral" },
   ];
 }
