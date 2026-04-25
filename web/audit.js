@@ -1,5 +1,5 @@
 import { VAT_RATES } from "./config.js";
-import { mapped, parseAmount } from "./utils.js";
+import { formatAmount, mapped, parseAmount } from "./utils.js";
 
 export function runAudit(kind, rows, mapping) {
   if (kind === "VAT_PURCHASE" || kind === "VAT_SALE" || kind === "JPK_XML") {
@@ -63,8 +63,15 @@ function auditVat(rows, mapping) {
 
   records.forEach((record) => {
     const base = { area: "VAT", document: record.document, contractor: record.contractor };
-    if (Math.abs(record.net + record.vat - record.gross) > 0.02) {
-      issues.push({ level: "CRITICAL", ...base, issue: "Netto + VAT nie zgadza sie z brutto.", recommendation: "Zweryfikuj kwoty i mapowanie kolumn." });
+    const expectedGross = record.net + record.vat;
+    const difference = expectedGross - record.gross;
+    if (Math.abs(difference) > 0.02) {
+      issues.push({
+        level: "CRITICAL",
+        ...base,
+        issue: `Netto + VAT = ${formatAmount(expectedGross)}, Brutto = ${formatAmount(record.gross)} (roznica ${formatAmount(difference)}).`,
+        recommendation: "Zweryfikuj kwoty i mapowanie kolumn Netto, VAT oraz Brutto.",
+      });
     }
     if (!record.document) {
       issues.push({ level: "CRITICAL", ...base, issue: "Brak numeru dokumentu.", recommendation: "Uzupelnij numer dokumentu lub mapowanie." });

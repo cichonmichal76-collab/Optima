@@ -42,9 +42,32 @@ export function normalizeHeader(value) {
 
 export function parseAmount(value) {
   if (value === undefined || value === null || value === "") return 0;
-  const text = String(value).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  let text = String(value).trim();
+  const isNegative = text.startsWith("(") && text.endsWith(")");
+  if (isNegative) text = text.slice(1, -1);
+
+  text = text.replace(/\s/g, "").replace(/\u00a0/g, "");
+  const commaIndex = text.lastIndexOf(",");
+  const dotIndex = text.lastIndexOf(".");
+  if (commaIndex >= 0 && dotIndex >= 0) {
+    const decimalSeparator = commaIndex > dotIndex ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    text = text.replaceAll(thousandsSeparator, "").replace(decimalSeparator, ".");
+  } else if (commaIndex >= 0) {
+    text = text.replace(",", ".");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(text)) {
+    text = text.replaceAll(".", "");
+  }
+
   const number = Number.parseFloat(text);
-  return Number.isFinite(number) ? number : 0;
+  if (!Number.isFinite(number)) return 0;
+  return isNegative ? -number : number;
+}
+
+export function formatAmount(value) {
+  return Number(value || 0).toFixed(2);
 }
 
 export function mapped(row, field, mapping) {
