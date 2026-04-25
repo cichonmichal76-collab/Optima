@@ -154,12 +154,14 @@ function updateSummary(summary) {
 
 function updateBadges(state) {
   const kind = $("#dataKind").value;
-  const missing = missingRequiredFields(kind, state.mapping).length;
+  const missingFields = missingRequiredFields(kind, state.mapping);
+  const missing = missingFields.length;
   const fieldCount = (FIELDS_BY_KIND[kind] || []).length;
   $("#formatBadge").textContent = `Format: ${state.format}`;
   $("#mappingBadge").textContent = `Mapowanie: ${missing ? `brakuje ${missing}` : "OK"}`;
   $("#recordBadge").textContent = `Wiersze: ${state.rows.length}`;
   $("#mappingCompleteness").textContent = `${Object.keys(state.mapping).length} / ${fieldCount}`;
+  updateMappingStatus(state, missingFields);
 }
 
 function requiredFieldsForKind(kind, mapping = {}) {
@@ -193,6 +195,28 @@ function missingRequiredFields(kind, mapping) {
     }
   }
   return missing;
+}
+
+function updateMappingStatus(state, missingFields) {
+  const status = $("#mappingStatus");
+  if (!status) return;
+
+  status.classList.remove("is-idle", "is-success", "is-fail");
+  if (!state.headers.length) {
+    status.classList.add("is-idle");
+    status.textContent = "Mapowanie oczekuje na plik.";
+    return;
+  }
+
+  if (!missingFields.length) {
+    status.classList.add("is-success");
+    status.textContent = "Mapowanie zakończone sukcesem. Wszystkie wymagane pola są przypisane.";
+    return;
+  }
+
+  const missingLabels = missingFields.map((field) => FIELD_LABELS[field] || field).join(", ");
+  status.classList.add("is-fail");
+  status.textContent = `Mapowanie zakończone niepowodzeniem. Brakuje: ${missingLabels}.`;
 }
 
 function updateReport(state) {

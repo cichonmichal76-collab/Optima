@@ -332,6 +332,32 @@ td {
   gap: 10px;
 }
 
+.mapping-status {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.mapping-status.is-idle {
+  background: #f5f7f5;
+  color: var(--muted);
+}
+
+.mapping-status.is-success {
+  background: #e7f8f1;
+  border-color: #9ad9c5;
+  color: #0f4f45;
+}
+
+.mapping-status.is-fail {
+  background: #fff5ea;
+  border-color: #e7bd7b;
+  color: #8a4d0f;
+}
+
 .mapping-row {
   display: grid;
   grid-template-columns: minmax(190px, 1fr) minmax(160px, 0.9fr);
