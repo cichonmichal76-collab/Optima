@@ -121,6 +121,7 @@ label {
 
 select,
 input[type="search"],
+input[type="text"],
 input[type="file"] {
   width: 100%;
   min-height: 40px;
@@ -132,6 +133,7 @@ input[type="file"] {
 }
 
 .sidebar select,
+.sidebar input[type="text"],
 .sidebar input[type="file"] {
   border-color: rgba(255, 255, 255, 0.28);
   background: #20342d;

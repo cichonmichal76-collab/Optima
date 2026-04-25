@@ -39,7 +39,16 @@
       </section>
 
       <section class="side-section">
-        <label for="fileInput">Plik</label>
+        <label>SQL Optima</label>
+        <input id="sqlServer" type="text" value=".\SQLEXPRESS02" aria-label="Serwer SQL">
+        <input id="sqlDatabase" type="text" value="OptimaAudit_Firma_202603" aria-label="Baza SQL">
+        <input id="sqlPeriod" type="text" value="202603" inputmode="numeric" aria-label="Okres RRRRMM">
+        <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
+        <div class="file-meta" id="sqlMeta">Gotowe do pobrania z kopii read-only.</div>
+      </section>
+
+      <section class="side-section">
+        <label for="fileInput">Plik awaryjnie</label>
         <input id="fileInput" type="file" accept=".xlsx,.xls,.csv,.txt,.json,.xml">
         <div class="file-meta" id="fileMeta">Brak pliku</div>
       </section>

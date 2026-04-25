@@ -5,8 +5,11 @@ import { parseInputFile } from "./parsers.js";
 import { generateSchemaDraft } from "./schema.js";
 import { $, $$, escapeHtml, normalizeHeader } from "./utils.js";
 
+const SQL_SUPPORTED_KINDS = new Set(["VAT_PURCHASE", "VAT_SALE", "LEDGER", "ACCOUNT_PLAN"]);
+
 export function initApp(state) {
   bindEvents(state);
+  updateSqlControls();
   renderMapping(state);
   renderPreview(state);
   updateReport(state);
@@ -16,7 +19,9 @@ export function initApp(state) {
 
 function bindEvents(state) {
   $("#fileInput").addEventListener("change", (event) => handleFileChange(event, state));
+  $("#loadSql").addEventListener("click", () => loadSqlData(state));
   $("#dataKind").addEventListener("change", () => {
+    updateSqlControls();
     autoMap(state);
     renderMapping(state);
   });
@@ -59,6 +64,69 @@ async function handleFileChange(event, state) {
     switchView("mapping");
   } catch (error) {
     $("#fileMeta").textContent = `Blad: ${error.message}`;
+  }
+}
+
+async function loadSqlData(state) {
+  const kind = $("#dataKind").value;
+  if (!SQL_SUPPORTED_KINDS.has(kind)) {
+    $("#sqlMeta").textContent = "Ten typ danych nie ma jeszcze jawnego mapowania SQL.";
+    return;
+  }
+
+  const request = {
+    kind,
+    server: $("#sqlServer").value.trim(),
+    database: $("#sqlDatabase").value.trim(),
+    period: $("#sqlPeriod").value.trim(),
+  };
+
+  $("#loadSql").disabled = true;
+  $("#sqlMeta").textContent = "Pobieram dane z SQL...";
+
+  try {
+    const response = await fetch("/api/sql-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error || "Nie udało się pobrać danych z SQL.");
+    }
+
+    state.headers = payload.headers || [];
+    state.rows = payload.rows || [];
+    state.format = "SQL";
+    state.fileName = `${request.database}:${kind}${request.period ? `:${request.period}` : ""}`;
+    state.issues = [];
+    $("#fileInput").value = "";
+    $("#fileMeta").textContent = "Źródło: SQL";
+    $("#sqlMeta").textContent = `SQL OK: ${state.rows.length} wierszy. ${(payload.notes || [])[0] || ""}`;
+    autoMap(state);
+    renderPreview(state);
+    updateSummary(buildSummary([], []));
+    renderIssues(state);
+    updateReport(state);
+    switchView("mapping");
+  } catch (error) {
+    $("#sqlMeta").textContent = `Błąd SQL: ${error.message}`;
+  } finally {
+    $("#loadSql").disabled = false;
+  }
+}
+
+function updateSqlControls() {
+  const kind = $("#dataKind").value;
+  const supported = SQL_SUPPORTED_KINDS.has(kind);
+  $("#loadSql").disabled = !supported;
+  $("#sqlPeriod").disabled = kind === "ACCOUNT_PLAN" || !supported;
+  if (!supported) {
+    $("#sqlMeta").textContent = "SQL: brak jawnego mapowania dla tego typu danych.";
+  } else if (kind === "ACCOUNT_PLAN") {
+    $("#sqlMeta").textContent = "SQL: plan kont nie wymaga okresu.";
+  } else {
+    $("#sqlMeta").textContent = "SQL: podaj okres RRRRMM i pobierz dane.";
   }
 }
 
@@ -246,6 +314,7 @@ function reset(state) {
   state.fileName = "";
   $("#fileInput").value = "";
   $("#fileMeta").textContent = "Brak pliku";
+  updateSqlControls();
   renderPreview(state);
   renderMapping(state);
   renderIssues(state);

@@ -1,7 +1,7 @@
 export const FIELDS_BY_KIND = {
-  VAT_PURCHASE: ["document_number", "issue_date", "receipt_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "register_name"],
-  VAT_SALE: ["document_number", "issue_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "register_name"],
-  LEDGER: ["document_number", "accounting_date", "operation_date", "description", "account", "account_opposite", "account_wn", "account_ma", "amount_wn", "amount_ma", "journal", "contractor_name"],
+  VAT_PURCHASE: ["document_number", "issue_date", "receipt_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "register_name", "vat_period"],
+  VAT_SALE: ["document_number", "issue_date", "receipt_date", "contractor_nip", "contractor_name", "net", "vat", "gross", "register_name", "vat_period"],
+  LEDGER: ["document_number", "accounting_date", "operation_date", "description", "account", "account_opposite", "account_wn", "account_ma", "amount_wn", "amount_ma", "journal", "contractor_name", "contractor_nip"],
   ACCOUNT_PLAN: ["account_number", "name", "account_type", "is_active", "jpk_s_12_1"],
   SETTLEMENTS: ["document_number", "contractor_name", "contractor_nip", "due_date", "payment_date", "amount", "paid_amount", "remaining_amount", "account", "status"],
   BANK: ["document_number", "operation_date", "description", "amount", "contractor_name", "account", "status"],
@@ -107,6 +107,7 @@ export const ALIASES = {
   gross: ["brutto", "wartosc brutto", "kwota brutto"],
   vat_rate: ["stawka vat", "vat procent", "stawka"],
   register_name: ["rejestr", "rejestr vat"],
+  vat_period: ["okres vat", "okres rozliczeniowy"],
   accounting_date: ["data ksiegowania", "data zapisu"],
   description: ["opis", "tresc"],
   account_wn: ["konto wn", "wn"],
@@ -125,6 +126,10 @@ export const ALIASES = {
   payment_date: ["data platnosci"],
   operation_date: ["data operacji"],
   account: ["konto rozrachunkowe", "konto"],
+  is_active: ["czy aktywne", "aktywne", "aktywny"],
+  jpk_s_12_1: ["znacznik jpk s_12_1", "s_12_1", "jpk s_12_1"],
+  jpk_s_12_2: ["znacznik jpk s_12_2", "s_12_2", "jpk s_12_2"],
+  jpk_s_12_3: ["znacznik jpk s_12_3", "s_12_3", "jpk s_12_3"],
   status: ["status"],
 };
 

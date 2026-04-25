@@ -12,11 +12,17 @@ from typing import Any
 
 import pandas as pd
 
+from src.connectors.optima_sql_mapping import build_optima_sql_query
+from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
+from src.core.enums import DataKind
+
 
 HOST = "127.0.0.1"
 PORT = 8000
 ROOT = Path(__file__).resolve().parent
 MAX_ROWS = 5000
+MAX_SQL_ROWS = 100000
+SQL_KINDS = {DataKind.VAT_PURCHASE, DataKind.VAT_SALE, DataKind.LEDGER, DataKind.ACCOUNT_PLAN}
 
 
 class OptimaRequestHandler(SimpleHTTPRequestHandler):
@@ -28,6 +34,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/api/preview":
             self._handle_preview()
+            return
+        if self.path == "/api/sql-preview":
+            self._handle_sql_preview()
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
 
@@ -53,6 +62,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
 
+    def _handle_sql_preview(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = load_sql_preview(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
     def _read_multipart_file(self) -> tuple[str, bytes]:
         content_type = self.headers.get("Content-Type", "")
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -68,6 +85,13 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return file_name, part.get_payload(decode=True) or b""
 
         raise ValueError("Nie znaleziono pliku w przeslanym formularzu.")
+
+    def _read_json_body(self) -> dict[str, Any]:
+        content_length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(content_length)
+        if not body:
+            return {}
+        return json.loads(body.decode("utf-8"))
 
     def _send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -114,6 +138,41 @@ def parse_spreadsheet(file_name: str, content: bytes) -> dict[str, Any]:
     return {"format": suffix[1:].upper(), "headers": headers, "rows": rows, "notes": notes}
 
 
+def load_sql_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    data_kind = DataKind(payload.get("kind") or "")
+    if data_kind not in SQL_KINDS:
+        raise ValueError("SQL obsługuje teraz: VAT zakup, VAT sprzedaż, zapisy księgowe i plan kont.")
+
+    server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
+    database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    period = payload.get("period") if data_kind != DataKind.ACCOUNT_PLAN else None
+    sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+
+    query = build_optima_sql_query(data_kind, period)
+    headers, rows = run_sqlcmd_table(query.sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
+
+    notes = [
+        f"Źródło SQL: {server} / {database}",
+        *query.notes,
+    ]
+    if len(rows) > MAX_SQL_ROWS:
+        notes.append(f"Wczytano pierwsze {MAX_SQL_ROWS} wierszy z {len(rows)}.")
+        rows = rows[:MAX_SQL_ROWS]
+
+    return {
+        "format": "SQL",
+        "headers": headers,
+        "rows": rows,
+        "notes": notes,
+        "source": {
+            "server": server,
+            "database": database,
+            "kind": data_kind.value,
+            "period": period,
+        },
+    }
+
+
 def normalize_cell(value: Any) -> str:
     if value is None:
         return ""
@@ -136,4 +195,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
