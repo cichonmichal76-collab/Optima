@@ -1,0 +1,25 @@
+{
+  "VAT_PURCHASE": {
+    "document_number": "Nr dokumentu",
+    "issue_date": "Data wystawienia",
+    "receipt_date": "Data wplywu",
+    "contractor_nip": "NIP",
+    "contractor_name": "Kontrahent",
+    "net": "Netto",
+    "vat": "VAT",
+    "gross": "Brutto",
+    "vat_rate": "Stawka VAT",
+    "register_name": "Rejestr"
+  },
+  "LEDGER": {
+    "document_number": "Nr dokumentu",
+    "accounting_date": "Data ksiegowania",
+    "description": "Opis",
+    "account_wn": "Konto Wn",
+    "account_ma": "Konto Ma",
+    "amount_wn": "Kwota Wn",
+    "amount_ma": "Kwota Ma",
+    "journal": "Dziennik"
+  }
+}
+

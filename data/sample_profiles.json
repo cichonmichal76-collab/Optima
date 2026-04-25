@@ -1,0 +1,16 @@
+{
+  "settings": {
+    "vat_accounts": [
+      "221-1",
+      "221-2"
+    ],
+    "financial_cost_accounts": [
+      "751-1"
+    ],
+    "public_accounts": [
+      "130-1"
+    ],
+    "enforce_jpk": false
+  },
+  "profiles": []
+}
