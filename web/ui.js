@@ -18,7 +18,6 @@ const PERIODLESS_KINDS = new Set(["ACCOUNT_PLAN", "CONTRACTORS", "FIXED_ASSETS",
 export function initApp(state) {
   bindEvents(state);
   updateSqlControls();
-  loadAvailableData(state);
   renderPreview(state);
   updateBadges(state);
 }
@@ -26,10 +25,6 @@ export function initApp(state) {
 function bindEvents(state) {
   $("#loadSql").addEventListener("click", () => loadSqlData(state));
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
-  $("#backupSelect").addEventListener("change", () => {
-    if ($("#backupSelect").value) $("#backupPath").value = $("#backupSelect").value;
-  });
-  $("#inspectBackup").addEventListener("click", () => inspectBackup());
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalog").addEventListener("click", () => loadAvailableData(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
@@ -48,6 +43,10 @@ async function loadSqlData(state) {
 async function loadModuleData(state, kind) {
   if (!SQL_SUPPORTED_KINDS.has(kind)) {
     $("#sqlMeta").textContent = "Ten typ danych nie ma jeszcze jawnego pobierania z SQL.";
+    return;
+  }
+  if (!$("#sqlDatabase").value.trim()) {
+    $("#sqlMeta").textContent = "Najpierw podłącz bazę.";
     return;
   }
 
@@ -88,74 +87,56 @@ async function loadModuleData(state, kind) {
 }
 
 async function scanBackups(state) {
-  $("#backupMeta").textContent = "Skanuję lokalne dyski w poszukiwaniu .BAK/.BAC...";
+  const directory = $("#backupDirectory").value.trim();
+  $("#backupPath").value = "";
+  $("#connectBackup").disabled = true;
+  $("#backupMeta").textContent = "Status: szukam pliku .BAK/.BAC w wybranym katalogu...";
+  $("#backupInfo").textContent = "Status: skanowanie katalogu.";
   try {
-    const response = await fetch("/api/backups");
+    const query = directory ? `?root=${encodeURIComponent(directory)}` : "";
+    const response = await fetch(`/api/backups${query}`);
     const payload = await response.json();
     state.backups = payload.backups || [];
-    renderBackupOptions(state.backups);
-    $("#backupMeta").textContent = state.backups.length
-      ? `Znaleziono ${state.backups.length} backupów. Wybierz z listy.`
-      : "Nie znaleziono backupów w głównych katalogach dysków i profilu użytkownika.";
+    selectNewestBackup(state.backups);
   } catch (error) {
-    $("#backupMeta").textContent = `Błąd skanowania: ${error.message}`;
+    $("#backupMeta").textContent = `Status: błąd wgrywania pliku: ${error.message}`;
+    $("#backupInfo").textContent = `Status: błąd - ${error.message}`;
   }
 }
 
-function renderBackupOptions(backups) {
-  $("#backupSelect").innerHTML = [
-    '<option value="">Wykryte backupy...</option>',
-    ...backups.map((backup) => (
-      `<option value="${escapeHtml(backup.path)}">${escapeHtml(backup.name)} (${escapeHtml(backup.size_mb)} MB)</option>`
-    )),
-  ].join("");
-  if (backups[0]) {
-    $("#backupSelect").value = backups[0].path;
-    $("#backupPath").value = backups[0].path;
+function selectNewestBackup(backups) {
+  const selected = backups[0];
+  if (!selected) {
+    $("#backupMeta").textContent = "Status: nie znaleziono pliku .BAK/.BAC w tym katalogu.";
+    $("#backupInfo").textContent = "Status: brak backupu do podłączenia.";
+    return;
   }
-}
-
-async function inspectBackup() {
-  const request = {
-    path: $("#backupPath").value.trim(),
-    server: $("#sqlServer").value.trim(),
-  };
-  $("#backupMeta").textContent = "Sprawdzam backup...";
-  try {
-    const response = await fetch("/api/backup-info", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    });
-    const payload = await response.json();
-    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się sprawdzić backupu.");
-    $("#sqlDatabase").value = payload.suggested_database || $("#sqlDatabase").value;
-    $("#backupInfo").textContent = JSON.stringify({
-      plik: payload.path,
-      baza_z_backupu: payload.database_name,
-      nazwa_backupu: payload.backup_name,
-      serwer_zrodlowy: payload.server_name,
-      data_start: payload.backup_start_date,
-      data_koniec: payload.backup_finish_date,
-      sugerowana_baza_robocza: payload.suggested_database,
-      pliki: payload.files,
-    }, null, 2);
-    $("#backupMeta").textContent = "Backup sprawdzony. Możesz podłączyć kopię read-only.";
-  } catch (error) {
-    $("#backupMeta").textContent = `Błąd backupu: ${error.message}`;
-    $("#backupInfo").textContent = error.message;
-  }
+  $("#backupPath").value = selected.path;
+  $("#connectBackup").disabled = false;
+  $("#backupMeta").textContent = `Status: wybrano ${selected.name} (${selected.size_mb} MB).`;
+  $("#backupInfo").textContent = `Status: plik gotowy do podłączenia.\nPlik: ${selected.path}`;
 }
 
 async function connectBackup(state) {
-  const request = {
-    path: $("#backupPath").value.trim(),
-    server: $("#sqlServer").value.trim(),
-    target_database: $("#sqlDatabase").value.trim(),
-  };
-  $("#backupMeta").textContent = "Odtwarzam backup do bazy roboczej read-only. To może potrwać...";
+  const path = $("#backupPath").value.trim();
+  if (!path) {
+    $("#backupMeta").textContent = "Status: najpierw kliknij „Wgraj plik” i wybierz backup.";
+    $("#backupInfo").textContent = "Status: brak wybranego pliku backupu.";
+    return;
+  }
+  $("#backupMeta").textContent = "Status: sprawdzam backup...";
+  $("#backupInfo").textContent = "Status: sprawdzam strukturę backupu.";
   $("#connectBackup").disabled = true;
   try {
+    const inspected = await inspectSelectedBackup(path);
+    const request = {
+      path,
+      server: $("#sqlServer").value.trim(),
+      target_database: inspected.suggested_database || $("#sqlDatabase").value.trim(),
+    };
+    $("#sqlDatabase").value = request.target_database;
+    $("#backupMeta").textContent = "Status: podłączam bazę read-only. To może potrwać...";
+    $("#backupInfo").textContent = `Status: odtwarzam kopię read-only.\nBaza: ${request.target_database}`;
     const response = await fetch("/api/connect-backup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -164,19 +145,43 @@ async function connectBackup(state) {
     const payload = await response.json();
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się podłączyć backupu.");
     $("#sqlDatabase").value = payload.database;
-    $("#backupInfo").textContent = JSON.stringify(payload, null, 2);
-    $("#backupMeta").textContent = `Podłączono bazę ${payload.database} jako read-only.`;
+    $("#backupMeta").textContent = `Status: podłączono bazę ${payload.database}.`;
+    $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
     updateBadges(state);
+    updateSqlControls();
     await loadAvailableData(state);
   } catch (error) {
-    $("#backupMeta").textContent = `Błąd podłączenia: ${error.message}`;
-    $("#backupInfo").textContent = error.message;
+    $("#backupMeta").textContent = `Status: błąd podłączenia - ${error.message}`;
+    $("#backupInfo").textContent = `Status: błąd - ${error.message}`;
   } finally {
-    $("#connectBackup").disabled = false;
+    $("#connectBackup").disabled = !$("#backupPath").value.trim();
   }
 }
 
+async function inspectSelectedBackup(path) {
+  const response = await fetch("/api/backup-info", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      path,
+      server: $("#sqlServer").value.trim(),
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error || "Nie udało się sprawdzić backupu.");
+  }
+  return payload;
+}
+
 async function loadAvailableData(state) {
+  if (!$("#sqlDatabase").value.trim()) {
+    const message = '<div class="available-card is-empty">Najpierw podłącz bazę.</div>';
+    $("#availableDataList").innerHTML = message;
+    $("#databaseDataList").innerHTML = message;
+    return;
+  }
+
   const request = {
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
@@ -229,7 +234,9 @@ function updateSqlControls() {
   const supported = SQL_SUPPORTED_KINDS.has(kind);
   $("#loadSql").disabled = !supported;
   $("#sqlPeriod").disabled = PERIODLESS_KINDS.has(kind) || !supported;
-  if (!supported) {
+  if (!$("#sqlDatabase").value.trim()) {
+    $("#sqlMeta").textContent = "Najpierw podłącz bazę.";
+  } else if (!supported) {
     $("#sqlMeta").textContent = "SQL: brak jawnego pobierania dla tego typu danych.";
   } else if (PERIODLESS_KINDS.has(kind)) {
     $("#sqlMeta").textContent = "SQL: ten moduł nie wymaga okresu.";

@@ -5,7 +5,7 @@ Lokalny panel web w Pythonie do bezpiecznego podgladu danych z odtworzonej kopii
 ## Co juz jest w repo
 
 - podlaczenie lokalnego backupu `.BAK`/`.BAC` do bazy roboczej read-only,
-- skanowanie dyskow w poszukiwaniu backupow Optimy,
+- wskazanie katalogu lub pliku backupu Optimy w sekcji `Wgraj plik`,
 - kafel `Dostepne dane` z pewnymi modulami wykrytymi w bazie,
 - pobieranie podgladu danych bezposrednio z SQL,
 - jawne zapytania SQL dla odtworzonej bazy Optima: VAT, dekrety, plan kont, rozrachunki, bank/kasa, JPK/deklaracje, kontrahenci, dokumenty, srodki trwale oraz kadry/place,
@@ -37,9 +37,9 @@ Wariant web z lokalnym backendem Python i polaczeniem do SQL:
 python serve.py
 ```
 
-Web GUI jest lekkim lokalnym panelem do podgladu danych z odtworzonej kopii bazy Comarch ERP Optima. Reczny import plikow w panelu web jest wylaczony: praca startuje od wskazania lokalnego backupu `.BAK`/`.BAC` albo od wybrania gotowej bazy roboczej SQL.
+Web GUI jest lekkim lokalnym panelem do podgladu danych z odtworzonej kopii bazy Comarch ERP Optima. Reczny import plikow w panelu web jest wylaczony: praca startuje od wskazania katalogu z lokalnym backupem `.BAK`/`.BAC`.
 
-Po uruchomieniu przez `python serve.py` panel web prowadzi prace od bazy SQL: wskazujesz lokalny plik `.BAK`/`.BAC`, program sprawdza backup, odtwarza go do bazy roboczej read-only, a nastepnie pokazuje kafel `Dostepne dane` w sidebarze. Obslugiwane pewne moduly do pobrania: rejestry VAT, dekrety, plan kont, rozrachunki, bank/kasa, JPK/deklaracje, kontrahenci, dokumenty, srodki trwale oraz kadry/place.
+Po uruchomieniu przez `python serve.py` panel web prowadzi prace od bazy SQL: w sekcji `Wgraj plik` wskazujesz katalog z lokalnym `.BAK`/`.BAC`, klikasz `Wgraj plik`, potem `Podlacz`. Program sprawdza backup, odtwarza go do bazy roboczej read-only, pokazuje status i udostepnia kafel `Dostepne dane` w sidebarze. Obslugiwane pewne moduly do pobrania: rejestry VAT, dekrety, plan kont, rozrachunki, bank/kasa, JPK/deklaracje, kontrahenci, dokumenty, srodki trwale oraz kadry/place.
 
 ## Eksport z odtworzonej bazy SQL Optima
 
@@ -62,8 +62,8 @@ pytest
 
 ## Przykladowy przeplyw pracy
 
-1. Uzytkownik wskazuje lokalny backup `.BAK`/`.BAC` albo gotowa baze robocza SQL.
-2. Program sprawdza backup, odtwarza kopie read-only i pokazuje kafel `Dostepne dane`.
+1. Uzytkownik wskazuje katalog z lokalnym backupem `.BAK`/`.BAC`.
+2. Uzytkownik klika `Wgraj plik`, potem `Podlacz`, a program pokazuje status operacji.
 3. Uzytkownik wybiera pewny modul danych, np. VAT, dekrety, kontrahentow albo rozrachunki.
 4. Program pobiera dane z SQL i pokazuje podglad pierwszych wierszy.
 5. Uzytkownik moze zmienic modul danych albo okres i odswiezyc podglad.

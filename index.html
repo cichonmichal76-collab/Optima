@@ -18,21 +18,18 @@
       </div>
 
       <section class="side-section">
-        <label>Baza SQL .BAK/.BAC</label>
-        <input id="sqlServer" type="text" value=".\SQLEXPRESS02" aria-label="Serwer SQL">
-        <input id="backupPath" type="text" placeholder="F:\moja_baza.bak albo .bac" aria-label="Ścieżka backupu">
-        <select id="backupSelect" aria-label="Wykryte backupy">
-          <option value="">Wykryte backupy...</option>
-        </select>
-        <button id="scanBackups" class="plain-button" type="button">Skanuj dyski</button>
-        <button id="inspectBackup" class="plain-button" type="button">Sprawdź backup</button>
-        <button id="connectBackup" class="primary-button" type="button">Podłącz kopię</button>
-        <div class="file-meta" id="backupMeta">Wskaż plik backupu SQL bez uploadu do przeglądarki.</div>
+        <label for="backupDirectory">Wgraj plik</label>
+        <input id="backupDirectory" type="text" value="F:\" placeholder="Wskaż katalog, np. F:\" aria-label="Katalog z backupem SQL">
+        <input id="backupPath" type="hidden">
+        <input id="sqlServer" type="hidden" value=".\SQLEXPRESS02">
+        <input id="sqlDatabase" type="hidden" value="">
+        <button id="scanBackups" class="plain-button" type="button">Wgraj plik</button>
+        <button id="connectBackup" class="primary-button" type="button" disabled>Podłącz</button>
+        <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
       </section>
 
       <section class="side-section">
-        <label for="sqlDatabase">Baza robocza</label>
-        <input id="sqlDatabase" type="text" value="OptimaAudit_Firma_202603" aria-label="Baza SQL">
+        <label for="sqlPeriod">Okres danych</label>
         <input id="sqlPeriod" type="text" value="202603" inputmode="numeric" aria-label="Okres RRRRMM">
         <button id="refreshDataCatalog" class="plain-button" type="button">Odśwież dostępne dane</button>
       </section>
@@ -40,7 +37,7 @@
       <section class="side-section data-catalog">
         <label>Dostępne dane</label>
         <div id="availableDataList" class="available-data-list">
-          <div class="available-card is-empty">Najpierw podłącz lub wybierz bazę roboczą.</div>
+          <div class="available-card is-empty">Najpierw podłącz bazę.</div>
         </div>
       </section>
 
@@ -87,10 +84,10 @@
               <span class="muted">read-only</span>
             </div>
             <p class="disclaimer">
-              Plik .BAK/.BAC jest odtwarzany lokalnie do bazy roboczej i ustawiany jako tylko do odczytu.
-              Dla dużych plików podawana jest ścieżka na dysku, bez przesyłania backupu przez przeglądarkę.
+              Wskaż katalog z backupem .BAK/.BAC, kliknij „Wgraj plik”, a potem „Podłącz”.
+              Program odtworzy lokalną kopię read-only bez zapisu do Optimy.
             </p>
-            <pre id="backupInfo">Wybierz lub wpisz ścieżkę backupu, potem kliknij „Sprawdź backup”.</pre>
+            <pre id="backupInfo">Status: oczekuję na wskazanie katalogu.</pre>
           </section>
           <section class="panel">
             <div class="panel-head">

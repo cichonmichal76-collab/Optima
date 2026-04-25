@@ -9,6 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
@@ -55,8 +56,11 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
 
     def do_GET(self) -> None:
-        if self.path == "/api/backups":
-            self._send_json({"backups": scan_backup_files()})
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/backups":
+            query = parse_qs(parsed.query)
+            roots = query.get("root") or query.get("directory") or None
+            self._send_json({"backups": scan_backup_files(roots)})
             return
         super().do_GET()
 

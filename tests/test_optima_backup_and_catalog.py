@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.connectors.optima_backup import sanitize_identifier, suggest_database_name
+from src.connectors.optima_backup import sanitize_identifier, scan_backup_files, suggest_database_name
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 
 
@@ -14,6 +14,24 @@ def test_suggest_database_name_creates_safe_audit_name():
 
 def test_sanitize_identifier_rejects_sql_punctuation():
     assert sanitize_identifier("abc]; DROP DATABASE master;--") == "abc_DROP_DATABASE_master"
+
+
+def test_scan_backup_files_accepts_directory_root(tmp_path):
+    backup = tmp_path / "firma.bac"
+    backup.write_bytes(b"backup")
+
+    found = scan_backup_files([str(tmp_path)])
+
+    assert any(item["path"] == str(backup) for item in found)
+
+
+def test_scan_backup_files_accepts_direct_file_root(tmp_path):
+    backup = tmp_path / "firma.bak"
+    backup.write_bytes(b"backup")
+
+    found = scan_backup_files([str(backup)])
+
+    assert any(item["name"] == "firma.bak" for item in found)
 
 
 def test_available_data_sql_contains_core_modules():

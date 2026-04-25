@@ -13,16 +13,15 @@ BACKUP_SUFFIXES = {".bak", ".bac"}
 
 
 def scan_backup_files(extra_roots: list[str] | None = None) -> list[dict[str, Any]]:
-    roots = _default_scan_roots()
-    if extra_roots:
-        roots.extend(Path(root) for root in extra_roots if root)
+    roots = [Path(root) for root in extra_roots if root] if extra_roots else _default_scan_roots()
 
     seen: set[str] = set()
     backups: list[dict[str, Any]] = []
     for root in roots:
         if not root.exists():
             continue
-        for path in _iter_backup_candidates(root):
+        candidates = [root] if root.is_file() and root.suffix.lower() in BACKUP_SUFFIXES else _iter_backup_candidates(root)
+        for path in candidates:
             resolved = str(path.resolve()).lower()
             if resolved in seen:
                 continue
