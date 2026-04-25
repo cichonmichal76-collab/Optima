@@ -903,6 +903,7 @@ const REPORTS = REPORT_GROUPS.flatMap((group) =>
 const REPORTS_BY_KEY = Object.fromEntries(REPORTS.map((report) => [report.key, report]));
 const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [group.id, group]));
 const SIDEBAR_GROUP_IDS = ["dashboards", "packages", "schemes"];
+const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 
 export function initApp(state) {
   renderSideMenu(state);
@@ -912,6 +913,7 @@ export function initApp(state) {
   renderCurrentView(state);
   updateTimeFilterMeta();
   updateBadges(state);
+  restoreKnownDatabase(state);
 }
 
 function bindEvents(state) {
@@ -920,6 +922,7 @@ function bindEvents(state) {
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
   $("#sqlDatabase").addEventListener("change", () => {
+    persistDatabase($("#sqlDatabase").value.trim());
     updateBadges(state);
     loadAvailableData(state);
     renderActiveReport(state);
@@ -967,6 +970,57 @@ function selectReport(state, reportKey) {
   renderActiveReport(state);
   updateBadges(state);
   loadActiveReportData(state);
+}
+
+async function restoreKnownDatabase(state) {
+  const restored = await ensureDatabaseAvailable(state);
+  if (restored) await loadActiveReportData(state);
+}
+
+async function ensureDatabaseAvailable(state) {
+  if ($("#sqlDatabase").value.trim()) return true;
+  const storedDatabase = readStoredDatabase();
+  const detectedDatabase = storedDatabase || await detectLatestDatabase();
+  if (!detectedDatabase || $("#sqlDatabase").value.trim()) return Boolean($("#sqlDatabase").value.trim());
+
+  $("#sqlDatabase").value = detectedDatabase;
+  persistDatabase(detectedDatabase);
+  $("#backupMeta").textContent = `Status: używam bazy ${detectedDatabase}.`;
+  $("#backupInfo").textContent = `Status: aktywna baza SQL.\nBaza: ${detectedDatabase}`;
+  updateBadges(state);
+  await loadAvailableData(state);
+  return true;
+}
+
+async function detectLatestDatabase() {
+  try {
+    const response = await fetch("/api/databases");
+    const payload = await response.json();
+    if (!response.ok || payload.error) return "";
+    return payload.databases?.[0]?.name || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function readStoredDatabase() {
+  try {
+    return window.localStorage.getItem(DATABASE_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function persistDatabase(databaseName) {
+  try {
+    if (databaseName) {
+      window.localStorage.setItem(DATABASE_STORAGE_KEY, databaseName);
+    } else {
+      window.localStorage.removeItem(DATABASE_STORAGE_KEY);
+    }
+  } catch (_error) {
+    // Brak localStorage nie blokuje pracy z bazą w tej sesji.
+  }
 }
 
 async function scanBackups(state) {
@@ -1028,6 +1082,7 @@ async function connectBackup(state) {
     const payload = await response.json();
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się podłączyć backupu.");
     $("#sqlDatabase").value = payload.database;
+    persistDatabase(payload.database);
     $("#backupMeta").textContent = `Status: podłączono bazę ${payload.database}.`;
     $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
     updateBadges(state);
@@ -1036,6 +1091,7 @@ async function connectBackup(state) {
     await loadActiveReportData(state);
   } catch (error) {
     $("#sqlDatabase").value = previousDatabase;
+    persistDatabase(previousDatabase);
     updateBadges(state);
     renderActiveReport(state);
     if (!previousDatabase) renderNoDatabase(state);
@@ -1102,10 +1158,13 @@ async function loadActiveReportData(state) {
     return;
   }
   if (!$("#sqlDatabase").value.trim()) {
-    clearReportData(state);
-    state.reportDataStatus = "no-database";
-    renderReportData(state);
-    return;
+    const restored = await ensureDatabaseAvailable(state);
+    if (!restored) {
+      clearReportData(state);
+      state.reportDataStatus = "no-database";
+      renderReportData(state);
+      return;
+    }
   }
 
   state.reportDataStatus = "loading";

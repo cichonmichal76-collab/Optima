@@ -66,6 +66,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             roots = query.get("root") or query.get("directory") or None
             self._send_json({"backups": scan_backup_files(roots)})
             return
+        if parsed.path == "/api/databases":
+            query = parse_qs(parsed.query)
+            server = (query.get("server") or [r".\SQLEXPRESS02"])[0]
+            try:
+                self._send_json({"databases": list_optima_databases(server)})
+            except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
         super().do_GET()
 
     def end_headers(self) -> None:
@@ -336,6 +344,27 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
             "date_to": date_to,
         },
     }
+
+
+def list_optima_databases(server: str, sqlcmd_path: str | None = None) -> list[dict[str, str]]:
+    sql = """
+SET NOCOUNT ON;
+SELECT TOP (20)
+  name AS [Baza],
+  CONVERT(varchar(19), create_date, 120) AS [Data utworzenia]
+FROM sys.databases
+WHERE name LIKE N'OptimaAudit_%'
+ORDER BY create_date DESC, name DESC;
+"""
+    _, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database="master", sqlcmd_path=sqlcmd_path))
+    return [
+        {
+            "name": row.get("Baza", ""),
+            "created_at": row.get("Data utworzenia", ""),
+        }
+        for row in rows
+        if row.get("Baza")
+    ]
 
 
 def normalize_cell(value: Any) -> str:
