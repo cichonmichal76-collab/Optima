@@ -48,7 +48,7 @@
           <h2 id="connectedDatabaseName">Brak podłączonej bazy</h2>
           <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz raport, który ma odpowiedzieć, co blokuje zamknięcie miesiąca.</p>
           <div class="status-strip">
-            <span id="recordBadge">Wiersze: 0</span>
+            <span id="recordBadge">Źródła: 0</span>
             <span id="selectedReportBadge">Raport: Status paczki danych</span>
           </div>
         </div>
@@ -156,41 +156,6 @@
             </div>
           </section>
         </div>
-
-        <section class="panel preview-panel">
-          <div class="panel-head panel-head-preview">
-            <div>
-              <h3>Zasilanie raportu z SQL</h3>
-              <span class="muted" id="previewMeta">Brak danych</span>
-            </div>
-            <div class="preview-toolbar">
-              <label for="dataKind">Typ danych z SQL</label>
-              <select id="dataKind">
-                <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
-                <option value="VAT_SALE">Rejestr VAT sprzedaż</option>
-                <option value="LEDGER">Zapisy księgowe</option>
-                <option value="ACCOUNT_PLAN">Plan kont</option>
-                <option value="SETTLEMENTS">Rozrachunki</option>
-                <option value="BANK">Bank / kasa</option>
-                <option value="JPK_DECLARATIONS">JPK i deklaracje</option>
-                <option value="CONTRACTORS">Kontrahenci</option>
-                <option value="DOCUMENTS">Dokumenty i załączniki</option>
-                <option value="FIXED_ASSETS">Środki trwałe</option>
-                <option value="HR_PAYROLL">Kadry i płace</option>
-              </select>
-              <button id="loadSql" class="primary-button" type="button">Pobierz z SQL</button>
-            </div>
-          </div>
-          <div class="inline-meta" id="sqlMeta">Wybierz raport lub kafel danych, a potem pobierz źródło główne z SQL.</div>
-          <div class="table-wrap compact">
-            <table>
-              <thead id="previewHead"></thead>
-              <tbody id="previewRows">
-                <tr><td class="empty">Wybierz raport w sidebarze albo kliknij kafel w sekcji Dane wykryte w bazie.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
 
         <section class="panel operational-panel">
           <div class="panel-head">

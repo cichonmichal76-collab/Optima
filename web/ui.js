@@ -1,18 +1,4 @@
-import { $, $$, escapeHtml } from "./utils.js";
-
-const SQL_SUPPORTED_KINDS = new Set([
-  "VAT_PURCHASE",
-  "VAT_SALE",
-  "LEDGER",
-  "ACCOUNT_PLAN",
-  "SETTLEMENTS",
-  "BANK",
-  "JPK_DECLARATIONS",
-  "CONTRACTORS",
-  "DOCUMENTS",
-  "FIXED_ASSETS",
-  "HR_PAYROLL",
-]);
+import { $, escapeHtml } from "./utils.js";
 
 const MODULE_LABELS = {
   VAT_PURCHASE: "Rejestr VAT zakup",
@@ -919,24 +905,19 @@ export function initApp(state) {
   renderReportSidebar(state);
   bindEvents(state);
   renderActiveReport(state);
-  updateSqlControls(state);
   updateTimeFilterMeta();
-  renderPreview(state);
   updateBadges(state);
 }
 
 function bindEvents(state) {
-  $("#loadSql").addEventListener("click", () => loadSqlData(state));
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#sqlDatabase").addEventListener("change", () => {
     updateBadges(state);
-    updateSqlControls(state);
     loadAvailableData(state);
     renderActiveReport(state);
   });
-  $("#dataKind").addEventListener("change", () => updateSqlControls(state));
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
   $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
   ["#filterYear", "#filterMonth", "#filterDateFrom", "#filterDateTo"].forEach((selector) => {
@@ -953,71 +934,9 @@ function bindEvents(state) {
 function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
   state.currentReportKey = reportKey;
-  state.headers = [];
-  state.rows = [];
-  state.currentModule = "";
-  const report = getCurrentReport(state);
-  if (report?.primaryModule && $(`#dataKind option[value="${report.primaryModule}"]`)) {
-    $("#dataKind").value = report.primaryModule;
-  }
   renderReportSidebar(state);
   renderActiveReport(state);
-  renderPreview(state);
-  updateSqlControls(state);
   updateBadges(state);
-}
-
-async function loadSqlData(state) {
-  const kind = $("#dataKind").value;
-  await loadModuleData(state, kind);
-}
-
-async function loadModuleData(state, kind) {
-  if (!SQL_SUPPORTED_KINDS.has(kind)) {
-    $("#sqlMeta").textContent = "Ten typ danych nie ma jeszcze jawnego pobierania z SQL.";
-    return;
-  }
-  if (!$("#sqlDatabase").value.trim()) {
-    $("#sqlMeta").textContent = "Najpierw podłącz bazę.";
-    return;
-  }
-
-  const request = {
-    module: kind,
-    server: $("#sqlServer").value.trim(),
-    database: $("#sqlDatabase").value.trim(),
-    ...getTimeFilterPayload(),
-  };
-
-  $("#loadSql").disabled = true;
-  $("#sqlMeta").textContent = "Pobieram dane z SQL...";
-
-  try {
-    const response = await fetch("/api/module-preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    });
-    const payload = await response.json();
-    if (!response.ok || payload.error) {
-      throw new Error(payload.error || "Nie udało się pobrać danych z SQL.");
-    }
-
-    state.headers = payload.headers || [];
-    state.rows = payload.rows || [];
-    state.format = "SQL";
-    state.fileName = `${request.database}:${kind}:${describeTimeFilter()}`;
-    state.currentModule = kind;
-    if ($(`#dataKind option[value="${kind}"]`)) $("#dataKind").value = kind;
-    $("#sqlMeta").textContent = `SQL OK: ${state.rows.length} wierszy. ${(payload.notes || [])[0] || ""}`.trim();
-    renderPreview(state);
-    renderActiveReport(state);
-    updateBadges(state);
-  } catch (error) {
-    $("#sqlMeta").textContent = `Błąd SQL: ${error.message}`;
-  } finally {
-    $("#loadSql").disabled = false;
-  }
 }
 
 async function scanBackups(state) {
@@ -1082,13 +1001,11 @@ async function connectBackup(state) {
     $("#backupMeta").textContent = `Status: podłączono bazę ${payload.database}.`;
     $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
     updateBadges(state);
-    updateSqlControls(state);
     updateTimeFilterMeta();
     await loadAvailableData(state);
   } catch (error) {
     $("#sqlDatabase").value = previousDatabase;
     updateBadges(state);
-    updateSqlControls(state);
     renderActiveReport(state);
     if (!previousDatabase) renderNoDatabase(state);
     $("#backupMeta").textContent = `Status: błąd podłączenia - ${error.message}`;
@@ -1159,13 +1076,6 @@ function renderAvailableData(state) {
     ? sorted.map((item) => availableDataCard(item, report)).join("")
     : '<div class="available-card is-empty">W tej bazie nie wykryto pewnych modułów do pobrania.</div>';
   $("#databaseDataList").innerHTML = html;
-  $$(".available-card[data-module]").forEach((card) => {
-    card.addEventListener("click", () => {
-      $("#dataKind").value = card.dataset.module;
-      updateSqlControls(state);
-      loadModuleData(state, card.dataset.module);
-    });
-  });
 }
 
 function availableDataCard(item, report) {
@@ -1189,57 +1099,19 @@ function availableDataCard(item, report) {
     </div>`;
 }
 
-function updateSqlControls(state) {
-  const kind = $("#dataKind").value;
-  const supported = SQL_SUPPORTED_KINDS.has(kind);
-  $("#loadSql").disabled = !supported;
-  if (!$("#sqlDatabase").value.trim()) {
-    $("#sqlMeta").textContent = "Najpierw podłącz bazę.";
-  } else if (!supported) {
-    $("#sqlMeta").textContent = "SQL: brak jawnego pobierania dla tego typu danych.";
-  } else {
-    const report = getCurrentReport(state);
-    const reportTitle = report ? report.title : "raportu";
-    $("#sqlMeta").textContent = `SQL: źródło dla raportu „${reportTitle}”, filtr: ${describeTimeFilter()}.`;
-  }
-}
-
-function renderPreview(state) {
-  $("#previewHead").innerHTML = state.headers.length
-    ? `<tr>${state.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`
-    : "";
-  $("#previewRows").innerHTML = state.rows.length
-    ? state.rows
-      .slice(0, 20)
-      .map((row) => `<tr>${state.headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`)
-      .join("")
-    : `<tr><td class="empty">${escapeHtml(previewEmptyMessage(state))}</td></tr>`;
-  $("#previewMeta").textContent = state.rows.length
-    ? `${selectedKindLabel()} • ${describeTimeFilter()} • pokazuję pierwsze ${Math.min(state.rows.length, 20)} z ${state.rows.length} wierszy`
-    : "Brak danych";
-}
-
 function updateBadges(state) {
   const databaseName = $("#sqlDatabase").value.trim() || "Brak podłączonej bazy";
   const report = getCurrentReport(state);
   $("#connectedDatabaseName").textContent = databaseName;
   $("#sidebarDatabaseName").textContent = databaseName;
-  $("#recordBadge").textContent = `Wiersze: ${state.rows.length}`;
+  $("#recordBadge").textContent = `Źródła: ${activeModuleCount(state.availableData)}`;
   $("#selectedReportBadge").textContent = `Raport: ${report?.title || "Brak raportu"}`;
   $("#viewSubtitle").textContent = report?.question || "Wgraj backup, podłącz bazę i wybierz raport.";
-}
-
-function selectedKindLabel() {
-  const selected = $("#dataKind").selectedOptions[0];
-  return selected ? selected.textContent : "Dane SQL";
 }
 
 async function applyTimeFilter(state) {
   updateTimeFilterMeta();
   await loadAvailableData(state);
-  if (state.currentModule) {
-    await loadModuleData(state, state.currentModule);
-  }
 }
 
 async function clearTimeFilters(state) {
@@ -1334,15 +1206,11 @@ function renderActiveReport(state) {
   $("#reportAlerts").innerHTML = report.alerts.map((item) => stackItem(item, "alert")).join("");
   $("#reportMetrics").innerHTML = buildMetricCards(report, state).map(metricCard).join("");
   updateBadges(state);
-  if (!state.rows.length) {
-    renderPreview(state);
-  }
 }
 
 function buildMetricCards(report, state) {
   const availableCount = moduleCount(report.primaryModule, state.availableData);
   const relatedCount = report.relatedModules.length;
-  const previewCount = state.currentModule === report.primaryModule ? state.rows.length : 0;
   const databaseReady = $("#sqlDatabase").value.trim();
   const readiness = !databaseReady
     ? "Brak bazy"
@@ -1357,7 +1225,6 @@ function buildMetricCards(report, state) {
     { label: "Kontrole", value: formatCount(report.controls.length), tone: "info" },
     { label: "Alerty / blokady", value: formatCount(report.alerts.length), tone: report.priority === "Krytyczny" ? "critical" : "warning" },
     { label: "Gotowość raportu", value: readiness, tone: availableCount > 0 ? "success" : "warning" },
-    { label: "Podgląd SQL", value: previewCount ? formatCount(previewCount) : "Niezaładowany", tone: previewCount ? "success" : "warning" },
     { label: "Filtr czasu", value: describeTimeFilter(), tone: "neutral" },
   ];
 }
@@ -1389,6 +1256,10 @@ function moduleCount(code, modules) {
   return Number((modules || []).find((item) => item.code === code)?.record_count || 0);
 }
 
+function activeModuleCount(modules) {
+  return (modules || []).filter((item) => Number(item.record_count || 0) > 0).length;
+}
+
 function formatCount(value) {
   if (typeof value === "string") return value;
   return Number(value || 0).toLocaleString("pl-PL");
@@ -1403,10 +1274,4 @@ function rankModuleForReport(item, report) {
   if (item.code === report.primaryModule) return 3;
   if (reportUsesModule(report, item.code)) return 2;
   return 1;
-}
-
-function previewEmptyMessage(state) {
-  const report = getCurrentReport(state);
-  const moduleName = moduleLabel($("#dataKind").value);
-  return `Raport „${report.title}” czeka na pobranie danych. Kliknij „Pobierz z SQL”, aby załadować ${moduleName.toLowerCase()}.`;
 }

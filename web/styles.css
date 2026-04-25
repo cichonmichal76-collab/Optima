@@ -338,8 +338,7 @@ input[type="date"] {
   box-shadow: var(--shadow);
 }
 
-.time-filter-bar label,
-.preview-toolbar label {
+.time-filter-bar label {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -543,11 +542,7 @@ input[type="date"] {
   background: var(--panel-soft);
   color: var(--ink);
   padding: 12px;
-  cursor: pointer;
-}
-
-.available-card:hover {
-  border-color: #9ad9c5;
+  cursor: default;
 }
 
 .available-card.is-empty,
@@ -586,27 +581,6 @@ input[type="date"] {
 
 .available-note-main {
   color: var(--accent);
-}
-
-.panel-head-preview {
-  align-items: end;
-}
-
-.preview-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.preview-toolbar {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 10px;
-  align-items: end;
-  min-width: min(100%, 560px);
-}
-
-.preview-toolbar .primary-button {
-  min-width: 160px;
 }
 
 .inline-meta,
@@ -703,13 +677,4 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .panel-head-preview {
-    align-items: start;
-  }
-
-  .preview-toolbar {
-    grid-template-columns: 1fr;
-    min-width: 0;
-    width: 100%;
-  }
 }
