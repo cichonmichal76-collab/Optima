@@ -63,6 +63,30 @@ def test_account_plan_query_maps_plan_accounts():
     assert "Acc_NieAktywne" in query.sql
 
 
+def test_settlements_query_uses_settlement_table_and_status():
+    query = build_optima_sql_query(DataKind.SETTLEMENTS, 202603)
+
+    assert "CDN.KsiRozrachunki" in query.sql
+    assert "KRo_Dokument AS [Numer dokumentu]" in query.sql
+    assert "KRo_TerminPlatnosci" in query.sql
+    assert "KRo_SumRozliczen" in query.sql
+    assert "[Konto rozrachunkowe]" in query.sql
+    assert "[Status]" in query.sql
+    assert "2026-03-01" in query.sql
+    assert "2026-04-01" in query.sql
+
+
+def test_bank_query_uses_bank_entries_and_operation_columns():
+    query = build_optima_sql_query(DataKind.BANK, year=2026)
+
+    assert "CDN.BnkZapisy" in query.sql
+    assert "[Data operacji]" in query.sql
+    assert "BZp_KontoPrzeciwstawne AS [Konto rozrachunkowe]" in query.sql
+    assert "N'Rozliczony'" in query.sql
+    assert "BZp_DataDok >= '2026-01-01'" in query.sql
+    assert "BZp_DataDok < '2027-01-01'" in query.sql
+
+
 def test_period_validation_rejects_invalid_month():
     with pytest.raises(ValueError):
         build_optima_sql_query(DataKind.VAT_PURCHASE, "202613")

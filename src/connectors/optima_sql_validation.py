@@ -16,6 +16,8 @@ SUPPORTED_VALIDATION_KINDS = {
     DataKind.VAT_SALE,
     DataKind.LEDGER,
     DataKind.ACCOUNT_PLAN,
+    DataKind.SETTLEMENTS,
+    DataKind.BANK,
 }
 
 FIELD_LABELS = {
@@ -48,6 +50,12 @@ FIELD_LABELS = {
     "jpk_s_12_1": "JPK S_12_1",
     "jpk_s_12_2": "JPK S_12_2",
     "jpk_s_12_3": "JPK S_12_3",
+    "due_date": "Termin płatności",
+    "payment_date": "Data rozliczenia / operacji",
+    "amount": "Kwota",
+    "paid_amount": "Zapłacono",
+    "remaining_amount": "Pozostało",
+    "status": "Status",
 }
 
 KIND_LABELS = {
@@ -55,6 +63,8 @@ KIND_LABELS = {
     DataKind.VAT_SALE: "Rejestr VAT sprzedaż",
     DataKind.LEDGER: "Zapisy księgowe",
     DataKind.ACCOUNT_PLAN: "Plan kont",
+    DataKind.SETTLEMENTS: "Rozrachunki",
+    DataKind.BANK: "Bank / kasa",
 }
 
 NUMERIC_FIELDS_BY_KIND = {
@@ -62,6 +72,8 @@ NUMERIC_FIELDS_BY_KIND = {
     DataKind.VAT_SALE: ["net", "vat", "gross"],
     DataKind.LEDGER: ["amount_wn", "amount_ma"],
     DataKind.ACCOUNT_PLAN: [],
+    DataKind.SETTLEMENTS: ["amount", "paid_amount", "remaining_amount"],
+    DataKind.BANK: ["amount"],
 }
 
 SAMPLE_LIMIT = 8

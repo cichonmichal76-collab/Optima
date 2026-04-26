@@ -16,6 +16,94 @@ const MODULE_LABELS = {
   HR_PAYROLL: "Kadry i płace",
 };
 
+const ADMIN_EXPORT_PROFILES = [
+  {
+    code: "VAT_PURCHASE",
+    label: MODULE_LABELS.VAT_PURCHASE,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Eksport z rejestru VAT zakupu.",
+  },
+  {
+    code: "VAT_SALE",
+    label: MODULE_LABELS.VAT_SALE,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Eksport z rejestru VAT sprzedaży.",
+  },
+  {
+    code: "LEDGER",
+    label: MODULE_LABELS.LEDGER,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Eksport zapisów księgowych z dzienników.",
+  },
+  {
+    code: "ACCOUNT_PLAN",
+    label: MODULE_LABELS.ACCOUNT_PLAN,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Eksport planu kont i znaczników JPK.",
+  },
+  {
+    code: "SETTLEMENTS",
+    label: MODULE_LABELS.SETTLEMENTS,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Rozrachunki i dokumenty nierozliczone.",
+  },
+  {
+    code: "BANK",
+    label: MODULE_LABELS.BANK,
+    support: "sql",
+    supportLabel: "Pełna walidacja SQL",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Zapisy kasowe i bankowe.",
+  },
+  {
+    code: "CONTRACTORS",
+    label: MODULE_LABELS.CONTRACTORS,
+    support: "preview",
+    supportLabel: "Parser i podgląd",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Kartoteka kontrahentów z listy Ogólne / Kontrahenci.",
+  },
+  {
+    code: "FIXED_ASSETS",
+    label: MODULE_LABELS.FIXED_ASSETS,
+    support: "preview",
+    supportLabel: "Parser i podgląd",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Środki trwałe i dokumenty środków trwałych.",
+  },
+  {
+    code: "HR_PAYROLL",
+    label: MODULE_LABELS.HR_PAYROLL,
+    support: "preview",
+    supportLabel: "Parser i podgląd",
+    formats: [".xlsx", ".xls", ".csv"],
+    description: "Listy płac i dane kadrowe.",
+  },
+  {
+    code: "JPK_DECLARATIONS",
+    label: MODULE_LABELS.JPK_DECLARATIONS,
+    support: "preview",
+    supportLabel: "Parser techniczny / podgląd",
+    formats: [".xml", ".xlsx", ".xls"],
+    description: "Pliki JPK oraz arkusze Excel generowane przy eksporcie JPK.",
+  },
+];
+
+const ADMIN_PROFILES_BY_CODE = Object.fromEntries(ADMIN_EXPORT_PROFILES.map((profile) => [profile.code, profile]));
+const ADMIN_SQL_VALIDATION_KINDS = new Set(
+  ADMIN_EXPORT_PROFILES.filter((profile) => profile.support === "sql").map((profile) => profile.code),
+);
+
 const ADMIN_VALIDATION_LABELS = {
   VAT_PURCHASE: "Rejestr VAT zakup",
   VAT_SALE: "Rejestr VAT sprzedaż",
@@ -941,7 +1029,29 @@ const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 const FAVORITES_STORAGE_KEY = "optimaAudit.favoriteReports";
 
+function selectedAdminProfile() {
+  const code = $("#adminValidationKind")?.value || ADMIN_EXPORT_PROFILES[0]?.code || "";
+  return ADMIN_PROFILES_BY_CODE[code] || ADMIN_EXPORT_PROFILES[0] || null;
+}
+
+function populateAdminValidationProfiles() {
+  const select = $("#adminValidationKind");
+  if (!select) return;
+  select.innerHTML = ADMIN_EXPORT_PROFILES.map(
+    (profile) => `<option value="${profile.code}">${escapeHtml(profile.label)}</option>`,
+  ).join("");
+}
+
+function refreshAdminProfileInputs() {
+  const profile = selectedAdminProfile();
+  const fileInput = $("#adminValidationFile");
+  if (!profile || !fileInput) return;
+  fileInput.accept = profile.formats.join(",");
+}
+
 export function initApp(state) {
+  populateAdminValidationProfiles();
+  refreshAdminProfileInputs();
   state.favoriteReports = restoreFavoriteReports();
   renderSideMenu(state);
   renderStartFavorites(state);
@@ -987,6 +1097,7 @@ function bindEvents(state) {
     state.adminValidationResult = null;
     state.adminValidationError = "";
     if (state.adminValidationStatus === "ready") state.adminValidationStatus = "idle";
+    refreshAdminProfileInputs();
     renderAdministration(state);
   });
   $("#runAdminValidation").addEventListener("click", () => runAdminValidation(state));
@@ -1594,10 +1705,28 @@ function renderStartFavorites(state) {
 }
 
 function renderAdministration(state) {
+  const profile = selectedAdminProfile();
+  const sqlProfiles = ADMIN_EXPORT_PROFILES.filter((item) => item.support === "sql").map((item) => item.label).join(", ");
+  const previewProfiles = ADMIN_EXPORT_PROFILES.filter((item) => item.support !== "sql").map((item) => item.label).join(", ");
+  document.querySelector('#viewAdministration .admin-grid > .admin-panel:first-child .panel-head .muted:not(#adminValidationScope)')?.setAttribute("hidden", "hidden");
+  $("#adminValidationScope").textContent = `Lista oparta na dokumentacji Optimy. Pełna walidacja SQL: ${sqlProfiles}. Parser / podgląd: ${previewProfiles}.`;
+  $("#adminProfileMeta").textContent = profile
+    ? `${profile.supportLabel}. Formaty: ${profile.formats.join(", ")}. ${profile.description}`
+    : "Wybierz typ eksportu z Optimy.";
+  $("#adminValidationCatalog").innerHTML = ADMIN_EXPORT_PROFILES.map((item) => `
+    <article class="admin-profile-card${item.code === profile?.code ? " is-active" : ""}${item.support === "sql" ? " is-sql" : ""}">
+      <div class="available-title">
+        <span>${escapeHtml(item.label)}</span>
+        <span class="available-count">${escapeHtml(item.supportLabel)}</span>
+      </div>
+      <span class="available-desc">${escapeHtml(item.description)}</span>
+    </article>
+  `).join("");
+  $("#runAdminValidation").disabled = !profile || !ADMIN_SQL_VALIDATION_KINDS.has(profile.code);
   $("#adminFilterMeta").textContent = `Filtr globalny: ${describeTimeFilter()}`;
   $("#adminUploadMeta").textContent = state.adminSourceFileName
     ? `ZaĹ‚adowano plik ${state.adminSourceFileName} (${state.adminSourceFormat || "nieznany format"}).`
-    : "Najpierw wybierz plik Excel z eksportem z Optimy.";
+    : "Najpierw wybierz plik eksportu z Optimy.";
   $("#adminPreviewMeta").textContent = state.adminSourceFileName
     ? `${state.adminSourceFileName}: ${(state.adminSourceFile?.rows?.length || 0).toLocaleString("pl-PL")} wierszy, ${state.adminPreviewHeaders.length} kolumn.`
     : "Brak zaĹ‚adowanego pliku.";
@@ -1657,9 +1786,17 @@ function clearAdminValidation(state) {
 }
 
 async function runAdminValidation(state) {
+  const profile = selectedAdminProfile();
   if (!state.adminSourceFile) {
     state.adminValidationStatus = "error";
-    state.adminValidationError = "Najpierw wybierz eksport Excela z Optimy.";
+    state.adminValidationError = "Najpierw wybierz plik eksportu z Optimy.";
+    renderAdministration(state);
+    return;
+  }
+
+  if (!profile || !ADMIN_SQL_VALIDATION_KINDS.has(profile.code)) {
+    state.adminValidationStatus = "error";
+    state.adminValidationError = `Profil ${profile?.label || "nieznany"} jest na liście parsera, ale nie ma jeszcze jawnego mapowania SQL 1:1.`;
     renderAdministration(state);
     return;
   }
@@ -1680,7 +1817,7 @@ async function runAdminValidation(state) {
   renderAdministration(state);
 
   const payload = {
-    kind: $("#adminValidationKind").value,
+    kind: profile.code,
     headers: state.adminSourceFile.headers || [],
     rows: state.adminSourceFile.rows || [],
     server: $("#sqlServer").value.trim(),

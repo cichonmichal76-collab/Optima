@@ -115,3 +115,112 @@ def test_validate_excel_against_sql_reports_mismatch(monkeypatch):
     assert payload["summary"]["sql_only_rows"] == 1
     assert payload["differences"]["excel_only_sample"]
     assert payload["differences"]["sql_only_sample"]
+
+
+def test_validate_excel_against_sql_supports_settlements(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "CDN.KsiRozrachunki" in sql
+        return (
+            [
+                "Numer dokumentu",
+                "Termin płatności",
+                "Data rozliczenia",
+                "Kwota",
+                "Zapłacono",
+                "Pozostało",
+                "Konto rozrachunkowe",
+                "Status",
+            ],
+            [
+                {
+                    "Numer dokumentu": "FS/12/04/2026",
+                    "Termin płatności": "2026-04-15",
+                    "Data rozliczenia": "2026-04-16",
+                    "Kwota": "1000,00",
+                    "Zapłacono": "1000,00",
+                    "Pozostało": "0,00",
+                    "Konto rozrachunkowe": "201-01",
+                    "Status": "Rozliczony",
+                }
+            ],
+        )
+
+    monkeypatch.setattr(optima_sql_validation, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = optima_sql_validation.validate_excel_against_sql(
+        headers=["Numer dokumentu", "Termin płatności", "Data rozliczenia", "Kwota", "Zapłacono", "Pozostało", "Konto", "Status"],
+        rows=[
+            {
+                "Numer dokumentu": "FS/12/04/2026",
+                "Termin płatności": "2026-04-15",
+                "Data rozliczenia": "2026-04-16",
+                "Kwota": "1000,00",
+                "Zapłacono": "1000,00",
+                "Pozostało": "0,00",
+                "Konto": "201-01",
+                "Status": "Rozliczony",
+            }
+        ],
+        data_kind=DataKind.SETTLEMENTS,
+        server=r".\SQLEXPRESS02",
+        database="OptimaAudit_Test",
+        year=2026,
+    )
+
+    assert payload["status"] == "success"
+    assert payload["summary"]["matched_rows"] == 1
+    assert payload["mapping"]["excel_missing_required"] == []
+    assert payload["mapping"]["sql_missing_required"] == []
+
+
+def test_validate_excel_against_sql_supports_bank(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "CDN.BnkZapisy" in sql
+        return (
+            [
+                "Numer dokumentu",
+                "Data operacji",
+                "Opis",
+                "Kwota",
+                "Kontrahent",
+                "Konto rozrachunkowe",
+                "Status",
+            ],
+            [
+                {
+                    "Numer dokumentu": "WB/21/04/2026",
+                    "Data operacji": "2026-04-21",
+                    "Opis": "Przelew za fakturę",
+                    "Kwota": "2300,00",
+                    "Kontrahent": "Firma Test",
+                    "Konto rozrachunkowe": "202-01",
+                    "Status": "Rozliczony",
+                }
+            ],
+        )
+
+    monkeypatch.setattr(optima_sql_validation, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = optima_sql_validation.validate_excel_against_sql(
+        headers=["Numer zapisu", "Data dokumentu", "Opis", "Kwota", "Kontrahent", "Konto przeciwstawne", "Status"],
+        rows=[
+            {
+                "Numer zapisu": "WB/21/04/2026",
+                "Data dokumentu": "2026-04-21",
+                "Opis": "Przelew za fakturę",
+                "Kwota": "2300,00",
+                "Kontrahent": "Firma Test",
+                "Konto przeciwstawne": "202-01",
+                "Status": "Rozliczony",
+            }
+        ],
+        data_kind=DataKind.BANK,
+        server=r".\SQLEXPRESS02",
+        database="OptimaAudit_Test",
+        year=2026,
+    )
+
+    assert payload["status"] == "success"
+    assert payload["summary"]["matched_rows"] == 1
+    assert payload["mapping"]["excel_missing_required"] == []
+    assert payload["mapping"]["sql_missing_required"] == []

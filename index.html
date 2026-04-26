@@ -176,6 +176,7 @@
             <div class="panel-head">
               <div>
                 <h3>Plik do weryfikacji</h3>
+                <span id="adminValidationScope" class="muted">Lista profili zostanie załadowana po starcie aplikacji.</span>
                 <span class="muted">Obsługiwane profile: VAT zakup, VAT sprzedaż, zapisy księgowe, plan kont</span>
               </div>
             </div>
@@ -189,16 +190,18 @@
                   <option value="ACCOUNT_PLAN">Plan kont</option>
                 </select>
               </label>
+              <div id="adminProfileMeta" class="muted">Wybierz typ eksportu z Optimy.</div>
               <label>
-                Plik Excel z Optimy
-                <input id="adminValidationFile" type="file" accept=".xlsx,.xls" aria-label="Plik Excel z Optimy">
+                Plik eksportu z Optimy
+                <input id="adminValidationFile" type="file" accept=".xlsx,.xls,.csv,.xml" aria-label="Plik eksportu z Optimy">
               </label>
               <div class="admin-actions">
                 <button id="runAdminValidation" class="primary-button" type="button">Sprawdź zgodność z SQL</button>
                 <button id="clearAdminValidation" class="plain-button" type="button">Wyczyść</button>
               </div>
             </div>
-            <div id="adminUploadMeta" class="file-meta">Najpierw wybierz plik Excel z eksportem z Optimy.</div>
+            <div id="adminValidationCatalog" class="admin-profile-catalog"></div>
+            <div id="adminUploadMeta" class="file-meta">Najpierw wybierz plik eksportu z Optimy.</div>
             <div id="adminValidationMeta" class="connection-status" hidden>Walidacja SQL oczekuje na plik.</div>
           </section>
 

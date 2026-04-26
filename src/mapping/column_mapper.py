@@ -160,6 +160,30 @@ class ColumnMapper:
                 mapping["is_active"] = normalized_to_original["status"]
             return
 
-        if data_kind in {DataKind.SETTLEMENTS, DataKind.BANK}:
+        if data_kind == DataKind.SETTLEMENTS:
+            if "payment_date" not in mapping and normalized_to_original.get("data_rozliczenia"):
+                mapping["payment_date"] = normalized_to_original["data_rozliczenia"]
+            if "paid_amount" not in mapping and normalized_to_original.get("suma_rozliczen"):
+                mapping["paid_amount"] = normalized_to_original["suma_rozliczen"]
+            if "account" not in mapping and normalized_to_original.get("konto"):
+                mapping["account"] = normalized_to_original["konto"]
             if "status" not in mapping and normalized_to_original.get("status"):
                 mapping["status"] = normalized_to_original["status"]
+            return
+
+        if data_kind == DataKind.BANK:
+            if "document_number" not in mapping and normalized_to_original.get("numer_zapisu"):
+                mapping["document_number"] = normalized_to_original["numer_zapisu"]
+            if "operation_date" not in mapping and normalized_to_original.get("data_dokumentu"):
+                mapping["operation_date"] = normalized_to_original["data_dokumentu"]
+            if "account" not in mapping:
+                account_header = (
+                    normalized_to_original.get("konto_przeciwstawne")
+                    or normalized_to_original.get("konto_przeciw")
+                    or normalized_to_original.get("konto_przeciwne")
+                )
+                if account_header:
+                    mapping["account"] = account_header
+            if "status" not in mapping and normalized_to_original.get("rozliczono"):
+                mapping["status"] = normalized_to_original["rozliczono"]
+            return

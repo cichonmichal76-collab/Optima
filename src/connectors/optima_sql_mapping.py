@@ -29,6 +29,10 @@ def build_optima_sql_query(
         return _build_ledger_query(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if data_kind == DataKind.ACCOUNT_PLAN:
         return _build_account_plan_query()
+    if data_kind == DataKind.SETTLEMENTS:
+        return _build_settlements_query(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    if data_kind == DataKind.BANK:
+        return _build_bank_query(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego mapowania SQL dla typu danych: {data_kind.value}")
 
 
@@ -144,6 +148,74 @@ ORDER BY Acc_NumerIdx, Acc_Numer;
         data_kind=DataKind.ACCOUNT_PLAN,
         sql=sql,
         notes=("Plan kont: jawne pola z CDN.Konta.",),
+    )
+
+
+def _build_settlements_query(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaSqlQuery:
+    date_filter = _date_where("KRo_DataDokumentu", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+SELECT
+    KRo_Dokument AS [Numer dokumentu],
+    CONVERT(varchar(10), KRo_DataDokumentu, 23) AS [Data dokumentu],
+    CONVERT(varchar(10), KRo_TerminPlatnosci, 23) AS [Termin płatności],
+    CONVERT(varchar(10), KRo_DataRozliczenia, 23) AS [Data rozliczenia],
+    CAST(KRo_Kwota AS decimal(18, 2)) AS [Kwota],
+    CAST(KRo_SumRozliczen AS decimal(18, 2)) AS [Zapłacono],
+    CAST(KRo_Kwota - KRo_SumRozliczen AS decimal(18, 2)) AS [Pozostało],
+    KRo_Konto AS [Konto rozrachunkowe],
+    CASE WHEN KRo_Bufor = 0 THEN N'Zatwierdzone' ELSE N'Bufor' END AS [Status],
+    KRo_KRoId AS [Optima KRoID]
+FROM CDN.KsiRozrachunki
+{date_filter}
+ORDER BY KRo_DataDokumentu DESC, KRo_KRoId DESC;
+""".strip()
+    return OptimaSqlQuery(
+        data_kind=DataKind.SETTLEMENTS,
+        sql=sql,
+        notes=(
+            "Rozrachunki: jawny odczyt z CDN.KsiRozrachunki.",
+            "Walidacja porównuje numer dokumentu, daty rozliczenia oraz kwoty rozrachunku.",
+        ),
+    )
+
+
+def _build_bank_query(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaSqlQuery:
+    date_filter = _date_where("BZp_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+SELECT
+    COALESCE(NULLIF(BZp_NumerPelny, ''), BZp_NumerObcy) AS [Numer dokumentu],
+    CONVERT(varchar(10), BZp_DataDok, 23) AS [Data operacji],
+    BZp_Opis AS [Opis],
+    CAST(BZp_Kwota AS decimal(18, 2)) AS [Kwota],
+    NULLIF(LTRIM(RTRIM(CONCAT(BZp_Nazwa1, ' ', BZp_Nazwa2, ' ', BZp_Nazwa3))), '') AS [Kontrahent],
+    BZp_KontoPrzeciwstawne AS [Konto rozrachunkowe],
+    CASE WHEN BZp_Rozliczono = 0 THEN N'Nierozliczony' ELSE N'Rozliczony' END AS [Status],
+    BZp_BZpID AS [Optima BZpID]
+FROM CDN.BnkZapisy
+{date_filter}
+ORDER BY BZp_DataDok DESC, BZp_BZpID DESC;
+""".strip()
+    return OptimaSqlQuery(
+        data_kind=DataKind.BANK,
+        sql=sql,
+        notes=(
+            "Bank i kasa: jawny odczyt z CDN.BnkZapisy.",
+            "Walidacja porównuje numer, datę, opis, kwotę i status rozliczenia zapisu.",
+        ),
     )
 
 

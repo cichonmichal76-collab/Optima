@@ -609,6 +609,29 @@ input[type="date"] {
   gap: 12px;
 }
 
+.admin-profile-catalog {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-profile-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.admin-profile-card.is-sql {
+  border-color: rgba(18, 114, 98, 0.28);
+  background: rgba(230, 247, 242, 0.8);
+}
+
+.admin-profile-card.is-active {
+  box-shadow: 0 0 0 2px rgba(18, 114, 98, 0.18);
+}
+
 .admin-form input[type="file"] {
   width: 100%;
   border: 1px solid var(--line);

@@ -30,7 +30,14 @@ PORT = 8000
 ROOT = Path(__file__).resolve().parent
 MAX_ROWS = 5000
 MAX_SQL_ROWS = 100000
-SQL_KINDS = {DataKind.VAT_PURCHASE, DataKind.VAT_SALE, DataKind.LEDGER, DataKind.ACCOUNT_PLAN}
+SQL_KINDS = {
+    DataKind.VAT_PURCHASE,
+    DataKind.VAT_SALE,
+    DataKind.LEDGER,
+    DataKind.ACCOUNT_PLAN,
+    DataKind.SETTLEMENTS,
+    DataKind.BANK,
+}
 
 
 class OptimaRequestHandler(SimpleHTTPRequestHandler):
