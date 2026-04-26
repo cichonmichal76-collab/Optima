@@ -929,6 +929,7 @@ export function initApp(state) {
   renderActiveReport(state);
   renderReportData(state);
   renderReportActions(state);
+  renderOptimaFilter(state);
   renderReportChart(state);
   renderCurrentView(state);
   updateTimeFilterMeta();
@@ -995,6 +996,11 @@ function bindEvents(state) {
     const moveButton = event.target.closest("[data-layout-move]");
     if (!moveButton) return;
     moveReportColumn(state, moveButton.dataset.layoutTarget, moveButton.dataset.layoutMove);
+  });
+  $("#reportOptimaContent").addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-copy-optima]");
+    if (!copyButton) return;
+    copyOptimaExpression(copyButton);
   });
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
@@ -1065,6 +1071,7 @@ function resetInteractiveReportState(state) {
   state.reportAlertSelections = {};
   state.reportColumnOrder = [];
   state.reportHiddenColumns = {};
+  clearOptimaFilterState(state);
 }
 
 async function restoreKnownDatabase(state) {
@@ -1365,6 +1372,9 @@ async function loadActiveReportData(state) {
     state.reportRows = filterReportRows(state, state.reportRawRows);
     state.reportNotes = payload.notes || [];
     state.reportSource = payload.source || null;
+    state.reportOptimaFilter = null;
+    state.reportOptimaFilterStatus = "loading";
+    state.reportOptimaFilterError = "";
     state.reportDataStatus = "ready";
     state.reportDataKey = report.key;
     renderReportFilterControls(report, state);
@@ -1372,12 +1382,14 @@ async function loadActiveReportData(state) {
     $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
     updateReportNarrativeMeta(state);
     renderReportData(state);
+    refreshOptimaFilter(state);
   } catch (error) {
     state.reportHeaders = [];
     state.reportRows = [];
     state.reportRawRows = [];
     state.reportNotes = [];
     state.reportSource = null;
+    clearOptimaFilterState(state);
     state.reportDataStatus = "error";
     state.reportDataError = error.message;
     state.reportDataKey = report.key;
@@ -1391,6 +1403,7 @@ function clearReportData(state) {
   state.reportRawRows = [];
   state.reportNotes = [];
   state.reportSource = null;
+  clearOptimaFilterState(state);
   state.reportDataStatus = "idle";
   state.reportDataKey = "";
   state.reportDataError = "";
@@ -1881,6 +1894,7 @@ function renderReportData(state) {
     $("#reportDataMeta").textContent = "Podłącz bazę, żeby zobaczyć konkretne dokumenty z raportu.";
     renderReportTable([], [], "Najpierw podłącz bazę SQL.");
     renderReportActions(state);
+    renderOptimaFilter(state);
     renderReportChart(state);
     return;
   }
@@ -1888,6 +1902,7 @@ function renderReportData(state) {
     $("#reportDataMeta").textContent = `Pobieram wyniki raportu „${report.title}” dla filtra: ${describeTimeFilter()}.`;
     renderReportTable([], [], "Pobieram dane z SQL...");
     renderReportActions(state);
+    renderOptimaFilter(state);
     renderReportChart(state);
     return;
   }
@@ -1895,6 +1910,7 @@ function renderReportData(state) {
     $("#reportDataMeta").textContent = `Błąd pobierania raportu: ${state.reportDataError || "nieznany błąd"}`;
     renderReportTable([], [], "Nie udało się pobrać wyników raportu.");
     renderReportActions(state);
+    renderOptimaFilter(state);
     renderReportChart(state);
     return;
   }
@@ -1902,6 +1918,7 @@ function renderReportData(state) {
     $("#reportDataMeta").textContent = "Raport ma aktywne połączenie do SQL i czeka na załadowanie wyników.";
     renderReportTable([], [], "Kliknij „Odśwież wyniki”, żeby pobrać dane.");
     renderReportActions(state);
+    renderOptimaFilter(state);
     renderReportChart(state);
     return;
   }
@@ -1915,6 +1932,7 @@ function renderReportData(state) {
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
   );
   renderReportActions(state);
+  renderOptimaFilter(state);
   renderReportChart(state);
 }
 
@@ -1946,6 +1964,70 @@ function renderReportActions(state) {
     ? `SQL aktywny, ${state.reportRows.length.toLocaleString("pl-PL")} wierszy gotowych do eksportu.`
     : "SQL aktywny. Załaduj dane, aby włączyć wykres i eksport z danymi.";
   $("#reportActionMeta").textContent = readyLabel;
+}
+
+function renderOptimaFilter(state) {
+  const report = getCurrentReport(state);
+  const panel = $("#reportOptimaContent");
+  const meta = $("#reportOptimaMeta");
+  const hasDatabase = Boolean($("#sqlDatabase").value.trim());
+  const hasLoadedRows = state.reportDataKey === report.key;
+
+  if (!hasDatabase) {
+    meta.textContent = "Najpierw podlacz baze, aby wygenerowac warunek dla Optimy.";
+    panel.innerHTML = '<div class="available-card is-empty">Brak polaczenia z baza SQL.</div>';
+    return;
+  }
+  if (!hasLoadedRows || state.reportDataStatus === "loading") {
+    meta.textContent = "Filtr do Optimy pojawi sie po zaladowaniu wynikow raportu.";
+    panel.innerHTML = '<div class="available-card is-empty">Czekam na wyniki raportu.</div>';
+    return;
+  }
+  if (state.reportOptimaFilterStatus === "loading") {
+    meta.textContent = "Buduje gotowy warunek do filtra zaawansowanego Optimy.";
+    panel.innerHTML = '<div class="available-card is-empty">Generowanie filtra do Optimy...</div>';
+    return;
+  }
+  if (state.reportOptimaFilterStatus === "error") {
+    meta.textContent = `Blad generowania filtra: ${state.reportOptimaFilterError || "nieznany blad"}`;
+    panel.innerHTML = '<div class="available-card is-empty">Nie udalo sie zbudowac filtra do Optimy.</div>';
+    return;
+  }
+
+  const model = state.reportOptimaFilter;
+  if (!model?.supported) {
+    meta.textContent = model?.message || "Dla tego wyniku nie da sie zbudowac gotowego filtra.";
+    panel.innerHTML = `<div class="available-card is-empty">${escapeHtml(model?.message || "Brak filtra do Optimy.")}</div>`;
+    return;
+  }
+
+  meta.textContent = `${model.target_list}: ${Number(model.record_count || 0).toLocaleString("pl-PL")} pozycji gotowych do filtrowania.`;
+  panel.innerHTML = `
+    <div class="optima-filter-card">
+      <span class="meta-label">Zalecane uzycie</span>
+      <strong>${escapeHtml(model.target_list)}</strong>
+      <ol class="optima-filter-list">
+        ${(model.instructions || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ol>
+      ${model.warning ? `<div class="optima-filter-warning">${escapeHtml(model.warning)}</div>` : ""}
+    </div>
+    ${renderOptimaSnippetCard(model.primary, "primary")}
+    ${renderOptimaSnippetCard(model.secondary, "secondary")}`;
+}
+
+function renderOptimaSnippetCard(snippet, variant) {
+  if (!snippet?.expression) return "";
+  const buttonLabel = variant === "primary" ? "Kopiuj filtr pewny" : "Kopiuj filtr alternatywny";
+  return `
+    <div class="optima-filter-card">
+      <span class="meta-label">${escapeHtml(snippet.label)}</span>
+      <strong>${escapeHtml(snippet.description || "")}</strong>
+      <textarea class="optima-filter-code" readonly>${escapeHtml(snippet.expression)}</textarea>
+      <div class="optima-filter-actions">
+        <button type="button" class="plain-button" data-copy-optima="${escapeHtml(snippet.expression)}">${escapeHtml(buttonLabel)}</button>
+        <span class="muted">Pole: ${escapeHtml(snippet.field)} | rekordy: ${escapeHtml(String(snippet.record_count || 0))}</span>
+      </div>
+    </div>`;
 }
 
 function renderReportChart(state) {
@@ -2005,6 +2087,7 @@ async function exportActiveReport(state, format, includeChart) {
   const report = getCurrentReport(state);
   const visibleHeaders = getVisibleReportHeaders(state);
   const chartAllowed = includeChart && hasChartData(visibleHeaders, state.reportRows);
+  const optimaSnippet = state.reportOptimaFilter?.primary?.expression || state.reportOptimaFilter?.secondary?.expression || "";
   const payload = {
     format,
     include_chart: chartAllowed,
@@ -2016,6 +2099,7 @@ async function exportActiveReport(state, format, includeChart) {
     notes: [
       `Raport: ${report.title}`,
       `Sekcja: ${report.section}`,
+      ...(optimaSnippet && optimaSnippet.length <= 600 ? [`Filtr do Optimy: ${optimaSnippet}`] : []),
       ...(state.reportNotes || []),
     ],
   };
@@ -2339,14 +2423,22 @@ function reportFilterControl(filter, state) {
 function applyReportSpecificFilters(state) {
   rememberReportFilterValues(state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
+  state.reportOptimaFilter = null;
+  state.reportOptimaFilterStatus = "loading";
+  state.reportOptimaFilterError = "";
   renderReportData(state);
+  refreshOptimaFilter(state);
 }
 
 function clearReportSpecificFilters(state) {
   state.reportFilterValues = {};
   renderReportFilterControls(getCurrentReport(state), state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
+  state.reportOptimaFilter = null;
+  state.reportOptimaFilterStatus = "loading";
+  state.reportOptimaFilterError = "";
   renderReportData(state);
+  refreshOptimaFilter(state);
 }
 
 function rememberReportFilterValues(state) {
@@ -2494,6 +2586,82 @@ function moduleLabel(code) {
 
 function moduleCount(code, modules) {
   return Number((modules || []).find((item) => item.code === code)?.record_count || 0);
+}
+
+function clearOptimaFilterState(state) {
+  state.reportOptimaFilter = null;
+  state.reportOptimaFilterStatus = "idle";
+  state.reportOptimaFilterError = "";
+}
+
+async function refreshOptimaFilter(state) {
+  const report = getCurrentReport(state);
+  if (!$("#sqlDatabase").value.trim() || state.reportDataKey !== report.key || !state.reportRows.length) {
+    clearOptimaFilterState(state);
+    renderOptimaFilter(state);
+    return;
+  }
+
+  const expectedReportKey = report.key;
+  const expectedRowCount = state.reportRows.length;
+  state.reportOptimaFilterStatus = "loading";
+  state.reportOptimaFilterError = "";
+  renderOptimaFilter(state);
+
+  try {
+    const response = await fetch("/api/optima-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report: report.queryKey,
+        report_title: report.title,
+        module: state.reportSource?.module || report.primaryModule,
+        headers: state.reportHeaders,
+        rows: state.reportRows,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udalo sie zbudowac filtra do Optimy.");
+    if (state.currentReportKey !== expectedReportKey || state.reportRows.length !== expectedRowCount) return;
+    state.reportOptimaFilter = payload;
+    state.reportOptimaFilterStatus = "ready";
+    renderOptimaFilter(state);
+  } catch (error) {
+    if (state.currentReportKey !== expectedReportKey) return;
+    state.reportOptimaFilter = null;
+    state.reportOptimaFilterStatus = "error";
+    state.reportOptimaFilterError = error.message;
+    renderOptimaFilter(state);
+  }
+}
+
+async function copyOptimaExpression(button) {
+  const text = String(button.dataset.copyOptima || "").trim();
+  if (!text) return;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      copyTextFallback(text);
+    }
+    $("#reportOptimaMeta").textContent = "Warunek do Optimy skopiowany do schowka.";
+  } catch (_error) {
+    copyTextFallback(text);
+    $("#reportOptimaMeta").textContent = "Warunek do Optimy skopiowany przez tryb awaryjny.";
+  }
+}
+
+function copyTextFallback(text) {
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "readonly");
+  area.style.position = "absolute";
+  area.style.left = "-9999px";
+  document.body.append(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
 }
 
 function activeModuleCount(modules) {

@@ -654,7 +654,8 @@ input[type="date"] {
 }
 
 .report-actions-panel,
-.report-chart-panel {
+.report-chart-panel,
+.report-optima-panel {
   display: grid;
   gap: 12px;
 }
@@ -673,6 +674,57 @@ input[type="date"] {
 
 .report-chart-content {
   min-height: 120px;
+}
+
+.optima-filter-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.optima-filter-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.optima-filter-card strong {
+  font-size: 15px;
+}
+
+.optima-filter-code {
+  width: 100%;
+  min-height: 92px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  padding: 12px;
+  font: 13px/1.45 "Cascadia Code", "Consolas", monospace;
+  resize: vertical;
+}
+
+.optima-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.optima-filter-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+}
+
+.optima-filter-warning {
+  color: var(--amber);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .report-chart-bars {

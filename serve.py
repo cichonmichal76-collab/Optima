@@ -16,6 +16,7 @@ import pandas as pd
 
 from src.connectors.optima_backup import inspect_backup, restore_backup, scan_backup_files
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
+from src.connectors.optima_filter_snippets import build_optima_filter_snippets
 from src.connectors.optima_report_queries import build_report_query
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
@@ -59,6 +60,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/sql-validation":
             self._handle_sql_validation()
+            return
+        if self.path == "/api/optima-filter":
+            self._handle_optima_filter()
             return
         if self.path == "/api/backup-info":
             self._handle_backup_info()
@@ -160,6 +164,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             response = validate_sql_read(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_optima_filter(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = build_optima_filter(payload)
             self._send_json(response)
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -477,6 +489,23 @@ def validate_sql_read(payload: dict[str, Any]) -> dict[str, Any]:
         date_from=date_from,
         date_to=date_to,
         sqlcmd_path=sqlcmd_path,
+    )
+
+
+def build_optima_filter(payload: dict[str, Any]) -> dict[str, Any]:
+    report_title = str(payload.get("report_title") or payload.get("report") or "Raport").strip()
+    module_code = str(payload.get("module") or "").strip()
+    headers = [str(header) for header in payload.get("headers") or []]
+    rows = [
+        {str(key): value for key, value in row.items()}
+        for row in payload.get("rows") or []
+        if isinstance(row, dict)
+    ]
+    return build_optima_filter_snippets(
+        report_title=report_title,
+        module_code=module_code,
+        headers=headers,
+        rows=rows,
     )
 
 
