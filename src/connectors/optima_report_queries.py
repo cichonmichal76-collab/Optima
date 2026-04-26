@@ -20,6 +20,8 @@ def build_report_query(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> OptimaReportQuery:
+    if report_key == "package-status":
+        return _build_package_status_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "documents-without-scheme":
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
@@ -27,6 +29,196 @@ def build_report_query(
     if report_key == "construction-site-costs":
         return _build_construction_site_costs_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego zapytania SQL dla raportu: {report_key}")
+
+
+def _build_package_status_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    document_where = _period_where("d.DoN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    vat_where = _period_where("v.VaN_DataWys", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+WITH VatPozycje AS (
+    SELECT
+        VaT_VaNID,
+        SUM(VaT_NettoDoVAT) AS NettoDoVAT,
+        SUM(VaT_VATDoVAT) AS VATDoVAT
+    FROM CDN.VatTab
+    GROUP BY VaT_VaNID
+),
+DocumentBase AS (
+    SELECT
+        d.DoN_DoNID,
+        d.DoN_DataDok,
+        d.DoN_NumerPelny
+    FROM CDN.DokNag AS d
+    {document_where}
+),
+VatBase AS (
+    SELECT
+        v.VaN_VaNID,
+        v.VaN_DataWys,
+        v.VaN_IdentKsieg,
+        CAST(COALESCE(p.NettoDoVAT, v.VaN_RazemNetto, 0) AS decimal(18, 2)) AS KwotaNetto,
+        CAST(COALESCE(p.VATDoVAT, v.VaN_RazemVAT, 0) AS decimal(18, 2)) AS KwotaVAT,
+        CAST(COALESCE(p.NettoDoVAT + p.VATDoVAT, v.VaN_RazemBrutto, 0) AS decimal(18, 2)) AS KwotaBrutto
+    FROM CDN.VatNag AS v
+    LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = v.VaN_VaNID
+    {vat_where}
+),
+DocumentIssues AS (
+    SELECT
+        d.DoN_DoNID,
+        CASE WHEN contractor.PodmiotID IS NULL THEN 1 ELSE 0 END AS BrakKontrahenta,
+        CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ksef.Kategoria, ''))), '') IS NULL THEN 1 ELSE 0 END AS BrakKategorii,
+        CASE
+            WHEN vat.VaNID IS NULL AND tra.TrNID IS NULL AND ksef.DKFID IS NULL THEN 1
+            WHEN COALESCE(vat.VatRateAvailable, 0) = 0 THEN 1
+            ELSE 0
+        END AS BrakStawkiVat,
+        CASE WHEN COALESCE(vat.HasControllingSegment, 0) = 0 THEN 1 ELSE 0 END AS BrakMpk
+    FROM DocumentBase AS d
+    OUTER APPLY (
+        SELECT TOP (1)
+            dp.DoP_PodmiotID AS PodmiotID
+        FROM CDN.DokPodmioty AS dp
+        WHERE dp.DoP_DoNID = d.DoN_DoNID
+        ORDER BY dp.DoP_DoPId DESC
+    ) AS contractor
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID AS TrNID,
+            tr.TrN_Kategoria AS Kategoria
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = d.DoN_DoNID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tra
+    OUTER APPLY (
+        SELECT TOP (1)
+            va.VaN_VaNID AS VaNID,
+            va.VaN_Kategoria AS Kategoria,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM CDN.VatTab AS vt
+                WHERE vt.VaT_VaNID = va.VaN_VaNID
+                  AND vt.VaT_Stawka IS NOT NULL
+            ) THEN 1 ELSE 0 END AS VatRateAvailable,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM CDN.VatTab AS vt
+                WHERE vt.VaT_VaNID = va.VaN_VaNID
+                  AND (
+                    NULLIF(LTRIM(RTRIM(vt.VaT_Segment1)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment2)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment3)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment4)), '') IS NOT NULL
+                  )
+            ) THEN 1 ELSE 0 END AS HasControllingSegment
+        FROM CDN.VatNag AS va
+        WHERE va.VaN_DnpID = d.DoN_DoNID
+        ORDER BY va.VaN_VaNID DESC
+    ) AS vat
+    OUTER APPLY (
+        SELECT TOP (1)
+            dk.DKF_DKFID AS DKFID,
+            dk.DKF_Kategoria AS Kategoria
+        FROM CDN.DokumentyKSeF AS dk
+        WHERE
+            (tra.TrNID IS NOT NULL AND dk.DKF_TrNId = tra.TrNID)
+            OR (vat.VaNID IS NOT NULL AND dk.DKF_VaNId = vat.VaNID)
+        ORDER BY dk.DKF_DKFID DESC
+    ) AS ksef
+),
+PackageMetrics AS (
+    SELECT
+        DB_NAME() AS NazwaPaczki,
+        N'Optima' AS Zrodlo,
+        CONVERT(varchar(10), MIN(d.DoN_DataDok), 23) AS OkresOd,
+        CONVERT(varchar(10), MAX(d.DoN_DataDok), 23) AS OkresDo,
+        (
+            SELECT CONVERT(varchar(19), create_date, 120)
+            FROM sys.databases
+            WHERE name = DB_NAME()
+        ) AS DataImportu,
+        COUNT(*) AS LiczbaDokumentow,
+        CAST(COALESCE((SELECT SUM(v.KwotaNetto) FROM VatBase AS v), 0) AS decimal(18, 2)) AS SumaNetto,
+        CAST(COALESCE((SELECT SUM(v.KwotaVAT) FROM VatBase AS v), 0) AS decimal(18, 2)) AS SumaVAT,
+        CAST(COALESCE((SELECT SUM(v.KwotaBrutto) FROM VatBase AS v), 0) AS decimal(18, 2)) AS SumaBrutto,
+        COALESCE((
+            SELECT COUNT(*)
+            FROM DocumentIssues AS issues
+            WHERE issues.BrakKontrahenta = 1
+               OR issues.BrakKategorii = 1
+               OR issues.BrakStawkiVat = 1
+               OR issues.BrakMpk = 1
+        ), 0) AS BezSchematu,
+        COALESCE((
+            SELECT COUNT(*)
+            FROM VatBase AS v
+            WHERE NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_IdentKsieg, ''))), '') IS NULL
+               OR NOT EXISTS (
+                    SELECT 1
+                    FROM CDN.DekretyNag AS n
+                    WHERE NULLIF(LTRIM(RTRIM(COALESCE(n.DeN_IdentKsieg, ''))), '') = NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_IdentKsieg, ''))), '')
+               )
+        ), 0) AS BezDekretu
+    FROM DocumentBase AS d
+)
+SELECT
+    metrics.NazwaPaczki AS [Nazwa paczki],
+    metrics.Zrodlo AS [Źródło],
+    CONCAT(COALESCE(metrics.OkresOd, N'brak'), N' do ', COALESCE(metrics.OkresDo, N'brak')) AS [Okres od-do],
+    metrics.DataImportu AS [Data importu],
+    metrics.LiczbaDokumentow AS [Liczba dokumentów],
+    metrics.SumaNetto AS [Suma netto],
+    metrics.SumaVAT AS [Suma VAT],
+    metrics.SumaBrutto AS [Suma brutto],
+    CASE
+        WHEN metrics.LiczbaDokumentow - (metrics.BezSchematu + metrics.BezDekretu) > 0
+            THEN metrics.LiczbaDokumentow - (metrics.BezSchematu + metrics.BezDekretu)
+        ELSE 0
+    END AS [Liczba dokumentów poprawnych],
+    CASE
+        WHEN metrics.BezSchematu + metrics.BezDekretu > metrics.LiczbaDokumentow
+            THEN metrics.LiczbaDokumentow
+        ELSE metrics.BezSchematu + metrics.BezDekretu
+    END AS [Liczba dokumentów z błędami],
+    metrics.BezSchematu AS [Liczba dokumentów bez schematu],
+    metrics.BezDekretu AS [Liczba dokumentów bez dekretu],
+    CASE
+        WHEN metrics.BezSchematu + metrics.BezDekretu > metrics.LiczbaDokumentow
+            THEN metrics.LiczbaDokumentow
+        ELSE metrics.BezSchematu + metrics.BezDekretu
+    END AS [Liczba dokumentów do ręcznej weryfikacji],
+    CASE
+        WHEN metrics.LiczbaDokumentow = 0 THEN N'Niekompletna'
+        WHEN metrics.BezSchematu > 0 OR metrics.BezDekretu > 0 THEN N'Błędy'
+        ELSE N'OK'
+    END AS [Status paczki],
+    CASE WHEN metrics.LiczbaDokumentow > 0 OR metrics.SumaBrutto > 0 THEN '1' ELSE '0' END AS [__flag_liczba_dokumentow],
+    CASE WHEN metrics.SumaNetto <> 0 OR metrics.SumaVAT <> 0 OR metrics.SumaBrutto <> 0 THEN '1' ELSE '0' END AS [__flag_suma_netto_vat_i_brutto],
+    CASE WHEN metrics.BezSchematu > 0 THEN '1' ELSE '0' END AS [__flag_dokumenty_bez_schematu],
+    CASE WHEN metrics.BezDekretu > 0 THEN '1' ELSE '0' END AS [__flag_dokumenty_bez_dekretu],
+    CASE WHEN metrics.BezSchematu > 0 OR metrics.BezDekretu > 0 THEN '1' ELSE '0' END AS [__flag_dokumenty_do_recznej_weryfikacji],
+    CASE WHEN metrics.LiczbaDokumentow > 0 THEN '1' ELSE '0' END AS [__flag_status_gotowosci_paczki],
+    CASE WHEN metrics.LiczbaDokumentow = 0 THEN '1' ELSE '0' END AS [__flag_brak_danych_zrodlowych],
+    CASE WHEN metrics.BezSchematu >= 10 OR (metrics.LiczbaDokumentow > 0 AND metrics.BezSchematu * 1.0 / metrics.LiczbaDokumentow >= 0.05) THEN '1' ELSE '0' END AS [__flag_duzo_dokumentow_bez_schematu],
+    CASE WHEN metrics.LiczbaDokumentow = 0 OR (metrics.BezSchematu + metrics.BezDekretu) > 0 THEN '1' ELSE '0' END AS [__flag_kontrola_techniczna_nieprzeszla]
+FROM PackageMetrics AS metrics;
+""".strip()
+    return OptimaReportQuery(
+        report_key="package-status",
+        sql=sql,
+        notes=(
+            "Status paczki jest liczony jawnie z dokumentow obiegu i rejestrow VAT ograniczonych do aktywnego okresu.",
+            "Brak schematu wynika z brakow kontrahenta, kategorii, stawki VAT lub controllingowych segmentow VAT.",
+            "Brak dekretu jest sprawdzany po VaN_IdentKsieg kontra CDN.DekretyNag.DeN_IdentKsieg.",
+        ),
+    )
 
 
 def _build_documents_without_scheme_report(

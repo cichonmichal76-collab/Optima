@@ -5,6 +5,23 @@ import serve
 from src.connectors.optima_report_queries import build_report_query
 
 
+def test_package_status_report_exposes_explicit_package_flags():
+    query = build_report_query("package-status", "202603")
+
+    assert "FROM CDN.DokNag AS d" in query.sql
+    assert "FROM CDN.VatNag AS v" in query.sql
+    assert "VaN_IdentKsieg" in query.sql
+    assert "DeN_IdentKsieg" in query.sql
+    assert "[__flag_dokumenty_bez_schematu]" in query.sql
+    assert "[__flag_dokumenty_bez_dekretu]" in query.sql
+    assert "[__flag_brak_danych_zrodlowych]" in query.sql
+    assert "[__flag_duzo_dokumentow_bez_schematu]" in query.sql
+    assert "[__flag_kontrola_techniczna_nieprzeszla]" in query.sql
+    assert "d.DoN_DataDok >= '2026-03-01'" in query.sql
+    assert "v.VaN_DataWys >= '2026-03-01'" in query.sql
+    assert query.notes
+
+
 def test_manual_entries_report_finds_entries_without_scheme():
     query = build_report_query("manual-entries", "202603")
 
@@ -93,6 +110,30 @@ def test_report_data_defaults_to_scope_2025_2026(monkeypatch):
     assert payload["rows"] == [{"Numer": "E/2026/03"}]
     assert payload["source"]["date_from"] == "2025-01-01"
     assert payload["source"]["date_to"] == "2026-12-31"
+
+
+def test_report_data_uses_explicit_package_status_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "PackageMetrics" in sql
+        assert "[Status paczki]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Nazwa paczki", "Status paczki"], [{"Nazwa paczki": "OptimaAudit_Test", "Status paczki": "OK"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "package-status",
+            "report_title": "Status paczki danych",
+            "module": "DOCUMENTS",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Nazwa paczki": "OptimaAudit_Test", "Status paczki": "OK"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "package-status"
 
 
 def test_report_data_defaults_to_selected_import_year(monkeypatch):
