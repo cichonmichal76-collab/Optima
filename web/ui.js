@@ -335,18 +335,38 @@ const REPORT_GROUPS = [
         summary: "Lista dokumentów, dla których nie udało się przypisać schematu oraz przyczyna braku schematu.",
         question: "Które dokumenty nie weszły do automatu i dlaczego?",
         priority: "Krytyczny",
+        queryKey: "documents-without-scheme",
         sources: ["Optima"],
         filters: ["Okres od-do", "Typ dokumentu", "Kategoria", "Kontrahent", "Powód braku schematu"],
         tags: ["brak schematu", "obsługa ręczna", "powód"],
         primaryModule: "DOCUMENTS",
         relatedModules: ["DOCUMENTS", "LEDGER", "ACCOUNT_PLAN"],
         controls: [
-          "Brak kategorii, kontrahenta, stawki VAT, MPK lub projektu.",
-          "Nietypowy typ dokumentu, korekta, dokument walutowy lub środek trwały.",
-          "Ocena, czy brak wynika z danych czy z konfiguracji schematu.",
+          "Brak kategorii.",
+          "Brak kontrahenta.",
+          "Brak stawki VAT.",
+          "Brak MPK.",
+          "Brak projektu.",
+          "Nietypowy typ dokumentu.",
+          "Korekta.",
+          "Dokument walutowy.",
+          "Środek trwały.",
+          "Brak wynika z danych.",
+          "Brak wynika z konfiguracji schematu.",
         ],
-        layout: ["Data", "Typ dokumentu", "Numer", "Kontrahent", "Netto", "VAT", "Brutto", "Kategoria", "Powód braku schematu"],
-        alerts: ["Brak kategorii.", "Brak kontrahenta.", "Brak MPK lub stawki VAT."],
+        layout: ["Numer dokumentu", "Numer obcy", "Tytuł", "Dotyczy", "Data dokumentu", "Status", "Typ", "Liczba plików", "Optima DoNID"],
+        alerts: [
+          "Brak kategorii.",
+          "Brak kontrahenta.",
+          "Brak MPK.",
+          "Brak stawki VAT.",
+          "Nietypowy typ dokumentu.",
+          "Korekta.",
+          "Dokument walutowy.",
+          "Środek trwały.",
+          "Brak wynika z danych.",
+          "Brak wynika z konfiguracji schematu.",
+        ],
       },
       {
         key: "scheme-without-entry",
@@ -1023,18 +1043,27 @@ const REPORTS = REPORT_GROUPS.flatMap((group) =>
   })),
 );
 
+const ALL_REPORT_KEYS = REPORTS.map((report) => report.key);
+const HERO_STACK_REPORTS = new Set(ALL_REPORT_KEYS);
 const REPORTS_BY_KEY = Object.fromEntries(REPORTS.map((report) => [report.key, report]));
 const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [group.id, group]));
 const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 const FAVORITES_STORAGE_KEY = "optimaAudit.favoriteReports";
-const EMBEDDED_HEADER_FILTER_REPORTS = new Set(["documents-without-scheme"]);
+const SIMPLE_STACK_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
+const EMBEDDED_HEADER_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
+const SELECTION_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTERS = {
   "documents-without-scheme": [
-    { header: "Typ dokumentu", filter: "Typ dokumentu", type: "select", emptyLabel: "Wszystkie typy" },
-    { header: "Kontrahent", filter: "Kontrahent", type: "text", placeholder: "Filtruj" },
-    { header: "Kategoria", filter: "Kategoria", type: "text", placeholder: "Filtruj" },
-    { header: "Powód braku schematu", filter: "Powód braku schematu", type: "select", emptyLabel: "Wszystkie powody" },
+    { header: "Numer dokumentu", filter: "Numer dokumentu", type: "text", placeholder: "Szukaj", headers: ["Numer dokumentu"] },
+    { header: "Numer obcy", filter: "Numer obcy", type: "text", placeholder: "Szukaj", headers: ["Numer obcy"] },
+    { header: "Tytuł", filter: "Tytuł", type: "text", placeholder: "Szukaj", headers: ["Tytuł"] },
+    { header: "Dotyczy", filter: "Dotyczy", type: "text", placeholder: "Szukaj", headers: ["Dotyczy"] },
+    { header: "Data dokumentu", filter: "Data dokumentu", type: "date-condition", headers: ["Data dokumentu"] },
+    { header: "Status", filter: "Status", type: "select", emptyLabel: "Wszystkie statusy", headers: ["Status"] },
+    { header: "Typ", filter: "Typ", type: "select", emptyLabel: "Wszystkie typy", headers: ["Typ"] },
+    { header: "Liczba plików", filter: "Liczba plików", type: "number-condition", headers: ["Liczba plików"] },
+    { header: "Optima DoNID", filter: "Optima DoNID", type: "text", placeholder: "Szukaj", headers: ["Optima DoNID"] },
   ],
 };
 
@@ -1167,11 +1196,11 @@ function bindReportEvents(state) {
   });
   $("#reportControls").addEventListener("change", () => {
     rememberControlSelections(state);
-    renderReportData(state);
+    applyReportSpecificFilters(state);
   });
   $("#reportAlerts").addEventListener("change", () => {
     rememberAlertSelections(state);
-    renderReportData(state);
+    applyReportSpecificFilters(state);
   });
   $("#reportLayoutList").addEventListener("change", () => {
     rememberColumnVisibility(state);
@@ -1192,13 +1221,14 @@ function bindReportEvents(state) {
     event.preventDefault();
     applyReportSpecificFilters(state);
   });
+  $("#reportTableFilterToggle").addEventListener("click", () => clearHeaderFilters(state));
   $("#reportOptimaContent").addEventListener("click", (event) => {
     const copyButton = event.target.closest("[data-copy-optima]");
     if (!copyButton) return;
     copyOptimaExpression(copyButton);
   });
   document.addEventListener("click", (event) => {
-    if (event.target.closest(".report-toolbar")) return;
+    if (event.target.closest(".report-toolbar, .report-toolbar-menu")) return;
     closeReportToolbarMenus(state);
   });
   document.addEventListener("keydown", (event) => {
@@ -2281,6 +2311,7 @@ function renderActiveReport(state) {
   const report = getCurrentReport(state);
   if (!report) return;
 
+  placeReportStacks(report);
   $("#reportSection").textContent = report.section;
   $("#reportTitle").textContent = report.title;
   $("#reportSummary").textContent = report.summary;
@@ -2288,13 +2319,27 @@ function renderActiveReport(state) {
   syncReportLayoutState(state);
   updateReportNarrativeMeta(state);
   $("#reportTags").innerHTML = report.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
-  $("#reportControls").innerHTML = renderSelectableStack(report.controls, state.reportControlSelections, "control");
+  $("#reportControls").innerHTML = renderReportSelectionStack(report, report.controls, state.reportControlSelections, "control");
   $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
-  $("#reportAlerts").innerHTML = renderSelectableStack(report.alerts, state.reportAlertSelections, "alert");
+  $("#reportAlerts").innerHTML = renderReportSelectionStack(report, report.alerts, state.reportAlertSelections, "alert");
   renderReportActions(state);
   renderReportData(state);
   renderReportChart(state);
   updateBadges(state);
+}
+
+function placeReportStacks(report) {
+  const heroSlot = $("#reportHeroStacksSlot");
+  const bottomSlot = $("#reportBottomStacksSlot");
+  const block = $("#reportStacksBlock");
+  if (!heroSlot || !bottomSlot || !block) return;
+
+  const useHeroSlot = HERO_STACK_REPORTS.has(report?.key);
+  const targetSlot = useHeroSlot ? heroSlot : bottomSlot;
+  if (block.parentElement !== targetSlot) targetSlot.appendChild(block);
+
+  heroSlot.hidden = !useHeroSlot;
+  bottomSlot.hidden = useHeroSlot;
 }
 
 function renderReportData(state) {
@@ -2303,6 +2348,7 @@ function renderReportData(state) {
   const rowsBelongToReport = state.reportDataKey === report.key;
   const visibleHeaders = getVisibleReportHeaders(state);
   $("#refreshReportData").disabled = !$("#sqlDatabase").value.trim() || status === "loading";
+  renderReportFilterIndicator(state);
 
   if (!$("#sqlDatabase").value.trim()) {
     renderReportDataPlaceholder(
@@ -2350,6 +2396,7 @@ function renderReportData(state) {
 
 function renderReportDataPlaceholder(state, metaText, emptyMessage) {
   $("#reportDataMeta").textContent = metaText;
+  renderReportFilterIndicator(state);
   renderReportTable(state, [], [], emptyMessage);
   renderReportCompanionPanels(state);
 }
@@ -2381,12 +2428,64 @@ function buildReportTableHead(report, state, headers) {
 }
 
 function renderEmbeddedHeaderFilterRow(report, state, headers) {
-  const config = EMBEDDED_HEADER_FILTERS[report.key] || [];
+  const config = embeddedHeaderFiltersForReport(report, headers);
   if (!config.length) return "";
   return `
     <tr class="report-header-filter-row">
       ${headers.map((header) => renderEmbeddedHeaderFilterCell(config, header, state, headers)).join("")}
     </tr>`;
+}
+
+function embeddedHeaderFiltersForReport(report, headers) {
+  const explicit = EMBEDDED_HEADER_FILTERS[report?.key] || [];
+  if (explicit.length) return explicit;
+  const sourceHeaders = headers.length ? headers : (report?.layout || []);
+  return sourceHeaders.map((header) => ({
+    header,
+    filter: header,
+    type: defaultEmbeddedHeaderFilterType(header),
+    headers: [header],
+    emptyLabel: defaultEmbeddedHeaderEmptyLabel(header),
+    placeholder: defaultEmbeddedHeaderPlaceholder(header),
+  }));
+}
+
+function defaultEmbeddedHeaderFilterType(header) {
+  const normalized = normalizeText(header);
+  const words = normalized.split(" ").filter(Boolean);
+  if (
+    isAmountHeader(header)
+    || ["liczba", "ilosc", "dni", "wiek", "saldo", "budzet", "wykonanie", "odchylenie", "marza"].some((part) => words.includes(part))
+  ) {
+    return "number-condition";
+  }
+  if (words.includes("data") || (words.includes("termin") && !words.includes("dni")) || words.includes("okres")) return "date-condition";
+  if (
+    ["status", "typ", "waluta", "obszar", "zrodlo", "magazyn", "powiazanie", "sekcja", "wlasciciel", "projekt", "mpk", "zadanie", "kontrahent", "dostawca"].some((part) => words.includes(part))
+  ) {
+    return "select";
+  }
+  return "text";
+}
+
+function defaultEmbeddedHeaderEmptyLabel(header) {
+  const normalized = normalizeText(header);
+  if (normalized.includes("status")) return "Wszystkie statusy";
+  if (normalized.includes("typ")) return "Wszystkie typy";
+  if (normalized.includes("waluta")) return "Wszystkie waluty";
+  if (normalized.includes("kontrahent")) return "Wszyscy kontrahenci";
+  if (normalized.includes("dostawca")) return "Wszyscy dostawcy";
+  if (normalized.includes("projekt")) return "Wszystkie projekty";
+  if (normalized.includes("mpk")) return "Wszystkie MPK";
+  return "Wszystkie";
+}
+
+function defaultEmbeddedHeaderPlaceholder(header) {
+  const normalized = normalizeText(header);
+  if (normalized.includes("numer")) return "Szukaj numeru";
+  if (normalized.includes("kontrahent") || normalized.includes("dostawca")) return "Szukaj";
+  if (normalized.includes("opis") || normalized.includes("tytul")) return "Szukaj";
+  return "Filtruj";
 }
 
 function renderEmbeddedHeaderFilterCell(config, header, state, headers) {
@@ -2395,11 +2494,14 @@ function renderEmbeddedHeaderFilterCell(config, header, state, headers) {
 
   const key = filterKey(filterConfig.filter);
   const value = state.reportFilterValues?.[key] || {};
+  const targetHeaders = filterConfig.headers || [header];
+  const targetHeadersAttr = escapeHtml(targetHeaders.join("||"));
+
   if (filterConfig.type === "select") {
-    const options = selectOptionsForFilter(filterConfig.filter, state.reportRawRows || state.reportRows || [], state.reportHeaders || headers);
+    const options = selectOptionsForHeaders(targetHeaders, state.reportRawRows || state.reportRows || []);
     return `
       <th class="report-header-filter-cell">
-        <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="select">
+        <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="select" data-filter-headers="${targetHeadersAttr}">
           <select class="report-header-filter-control" aria-label="${escapeHtml(filterConfig.filter)}">
             <option value="">${escapeHtml(filterConfig.emptyLabel || "Wszystkie")}</option>
             ${options.map((option) => `<option value="${escapeHtml(option)}"${option === value.value ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
@@ -2408,9 +2510,97 @@ function renderEmbeddedHeaderFilterCell(config, header, state, headers) {
       </th>`;
   }
 
+  if (filterConfig.type === "date-condition") {
+    const operator = value.operator || "";
+    const isRange = operator === "between";
+    const needsDateValue = operator && !isRange;
+    return `
+      <th class="report-header-filter-cell">
+        <div class="report-header-filter-field report-header-filter-date${isRange ? " is-range" : ""}${needsDateValue ? " is-single" : ""}" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="date-condition" data-filter-headers="${targetHeadersAttr}">
+          <select class="report-header-filter-control" data-filter-part="operator" aria-label="${escapeHtml(filterConfig.filter)} warunek">
+            ${[
+              ["", "Dowolnie"],
+              ["eq", "Dokładnie"],
+              ["gt", "Po"],
+              ["gte", "Od"],
+              ["lt", "Przed"],
+              ["lte", "Do"],
+              ["between", "Od-do"],
+            ].map(([optionValue, label]) => `<option value="${optionValue}"${optionValue === operator ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+          </select>
+          ${needsDateValue || isRange ? `
+            <input
+              type="date"
+              class="report-header-filter-control"
+              data-filter-part="value"
+              value="${escapeHtml(value.value || "")}"
+              aria-label="${escapeHtml(filterConfig.filter)} wartość"
+            >
+          ` : ""}
+          ${isRange ? `
+            <input
+              type="date"
+              class="report-header-filter-control"
+              data-filter-part="value-to"
+              value="${escapeHtml(value.valueTo || "")}"
+              aria-label="${escapeHtml(filterConfig.filter)} wartość do"
+            >
+          ` : ""}
+        </div>
+      </th>`;
+  }
+
+  if (filterConfig.type === "number-condition") {
+    const operator = value.operator || "";
+    const isRange = operator === "between";
+    const needsNumericValue = operator && !isRange;
+    return `
+      <th class="report-header-filter-cell">
+        <div class="report-header-filter-field report-header-filter-number${isRange ? " is-range" : ""}${needsNumericValue ? " is-single" : ""}" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="number-condition" data-filter-headers="${targetHeadersAttr}">
+          <select class="report-header-filter-control" data-filter-part="operator" aria-label="${escapeHtml(filterConfig.filter)} warunek">
+            ${[
+              ["", "Dowolnie"],
+              ["eq", "Równe"],
+              ["gt", "Większe niż"],
+              ["gte", "Większe lub równe"],
+              ["lt", "Mniejsze niż"],
+              ["lte", "Mniejsze lub równe"],
+              ["between", "Od-do"],
+            ].map(([optionValue, label]) => `<option value="${optionValue}"${optionValue === operator ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+          </select>
+          ${needsNumericValue || isRange ? `
+            <input
+              type="number"
+              inputmode="numeric"
+              step="1"
+              min="0"
+              class="report-header-filter-control"
+              data-filter-part="value"
+              value="${escapeHtml(value.value || "")}"
+              placeholder="Wartość"
+              aria-label="${escapeHtml(filterConfig.filter)} wartość"
+            >
+          ` : ""}
+          ${isRange ? `
+            <input
+              type="number"
+              inputmode="numeric"
+              step="1"
+              min="0"
+              class="report-header-filter-control"
+              data-filter-part="value-to"
+              value="${escapeHtml(value.valueTo || "")}"
+              placeholder="Do"
+              aria-label="${escapeHtml(filterConfig.filter)} wartość do"
+            >
+          ` : ""}
+        </div>
+      </th>`;
+  }
+
   return `
     <th class="report-header-filter-cell">
-      <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="text">
+      <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="text" data-filter-headers="${targetHeadersAttr}">
         <input
           type="text"
           class="report-header-filter-control"
@@ -2739,6 +2929,66 @@ function renderSelectableStack(items, selections, tone) {
   }).join("");
 }
 
+function renderSimpleSelectableStack(items, selections, tone) {
+  return `
+    <div class="simple-filter-list simple-filter-list-${escapeHtml(tone)}">
+      ${items.map((item, index) => {
+        const id = `${tone}-simple-${index}`;
+        const checked = Boolean(selections?.[item]);
+        return `
+          <label class="simple-filter-option simple-filter-option-${escapeHtml(tone)}${checked ? " is-active" : ""}" for="${escapeHtml(id)}">
+            <input id="${escapeHtml(id)}" type="checkbox" data-choice-type="${escapeHtml(tone)}" data-choice-value="${escapeHtml(item)}"${checked ? " checked" : ""}>
+            <span>${escapeHtml(item)}</span>
+          </label>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderReportSelectionStack(report, items, selections, tone) {
+  if (SIMPLE_STACK_FILTER_REPORTS.has(report?.key)) {
+    return renderSimpleSelectableStack(items, selections, tone);
+  }
+  return renderSelectableStack(items, selections, tone);
+}
+
+function selectionFilterField(label) {
+  return `__flag_${filterKey(label)}`;
+}
+
+function rowHasSelectionFlag(row, label) {
+  const value = String(row?.[selectionFilterField(label)] ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "tak" || value === "yes";
+}
+
+function applySelectionFiltersToRows(report, rows, state) {
+  if (!SELECTION_FILTER_REPORTS.has(report?.key)) return rows;
+  const selected = [...new Set([
+    ...selectedTexts(state.reportControlSelections),
+    ...selectedTexts(state.reportAlertSelections),
+  ])];
+  if (!selected.length) return rows;
+  const headers = state.reportHeaders || [];
+  return rows.filter((row) => selected.some((label) => rowMatchesSelectionCriterion(row, headers, label)));
+}
+
+function rowMatchesSelectionCriterion(row, headers, label) {
+  const flagField = selectionFilterField(label);
+  if (Object.prototype.hasOwnProperty.call(row || {}, flagField)) {
+    return rowHasSelectionFlag(row, label);
+  }
+
+  const haystack = normalizeText(
+    headers
+      .filter((header) => !String(header || "").startsWith("__flag_"))
+      .map((header) => `${header} ${row?.[header] ?? ""}`)
+      .join(" "),
+  );
+  const keywords = keywordsFromText(label).filter((keyword) => !["oraz", "wedlug", "ktore", "ktorych", "lista", "raport"].includes(keyword));
+  if (!keywords.length) return false;
+  if (keywords.length === 1) return haystack.includes(keywords[0]);
+  return keywords.filter((keyword) => haystack.includes(keyword)).length >= Math.min(2, keywords.length);
+}
+
 function renderLayoutEditor(state) {
   const headers = getLayoutHeaders(state);
   return headers.map((header, index) => {
@@ -2827,7 +3077,8 @@ function ensureVisibleColumns(state, headers = state.reportColumnOrder || []) {
 
 function getAvailableLayoutHeaders(state) {
   const report = getCurrentReport(state);
-  return state.reportHeaders.length ? [...state.reportHeaders] : [...report.layout];
+  const sourceHeaders = state.reportHeaders.length ? [...state.reportHeaders] : [...report.layout];
+  return sourceHeaders.filter((header) => !String(header || "").startsWith("__flag_"));
 }
 
 function getLayoutHeaders(state) {
@@ -2984,17 +3235,81 @@ function clearReportSpecificFilters(state) {
   refreshOptimaFilter(state);
 }
 
+function clearHeaderFilters(state) {
+  const report = getCurrentReport(state);
+  if (!reportUsesEmbeddedHeaderFilters(report)) return;
+  const fields = [...document.querySelectorAll("#reportDataHead [data-report-filter]")];
+  if (!fields.length) return;
+  fields.forEach(clearSingleReportFilterField);
+  state.reportFilterValues = {};
+  applyReportSpecificFilters(state);
+}
+
+function clearSingleReportFilterField(field) {
+  const type = field.dataset.filterType;
+  if (type === "multiselect") {
+    field.querySelectorAll("input[type='checkbox']").forEach((input) => {
+      input.checked = false;
+    });
+    return;
+  }
+
+  field.querySelectorAll("select").forEach((select) => {
+    select.value = "";
+  });
+  field.querySelectorAll("input").forEach((input) => {
+    if (input.type === "checkbox") {
+      input.checked = false;
+      return;
+    }
+    input.value = "";
+  });
+}
+
 function rememberReportFilterValues(state) {
   const values = {};
   document.querySelectorAll("[data-report-filter]").forEach((field) => {
     const key = field.dataset.reportFilter;
     const type = field.dataset.filterType;
+    const targetHeaders = (field.dataset.filterHeaders || "")
+      .split("||")
+      .map((header) => header.trim())
+      .filter(Boolean);
     if (type === "amount-range") {
       values[key] = {
         type,
         label: field.dataset.filterLabel || "",
         min: field.querySelector("[data-filter-part='min']")?.value.trim() || "",
         max: field.querySelector("[data-filter-part='max']")?.value.trim() || "",
+        headers: targetHeaders,
+      };
+      return;
+    }
+    if (type === "date-condition") {
+      const operator = field.querySelector("[data-filter-part='operator']")?.value.trim() || "";
+      const valueToInput = field.querySelector("[data-filter-part='value-to']");
+      if (valueToInput) valueToInput.disabled = operator !== "between";
+      values[key] = {
+        type,
+        label: field.dataset.filterLabel || "",
+        operator,
+        value: field.querySelector("[data-filter-part='value']")?.value.trim() || "",
+        valueTo: valueToInput?.value.trim() || "",
+        headers: targetHeaders,
+      };
+      return;
+    }
+    if (type === "number-condition") {
+      const operator = field.querySelector("[data-filter-part='operator']")?.value.trim() || "";
+      const valueToInput = field.querySelector("[data-filter-part='value-to']");
+      if (valueToInput) valueToInput.disabled = operator !== "between";
+      values[key] = {
+        type,
+        label: field.dataset.filterLabel || "",
+        operator,
+        value: field.querySelector("[data-filter-part='value']")?.value.trim() || "",
+        valueTo: valueToInput?.value.trim() || "",
+        headers: targetHeaders,
       };
       return;
     }
@@ -3003,6 +3318,7 @@ function rememberReportFilterValues(state) {
         type,
         label: field.dataset.filterLabel || "",
         values: [...field.querySelectorAll("input[type='checkbox']:checked")].map((input) => input.value.trim()).filter(Boolean),
+        headers: targetHeaders,
       };
       return;
     }
@@ -3011,6 +3327,7 @@ function rememberReportFilterValues(state) {
       type,
       label: field.dataset.filterLabel || "",
       value: input?.value.trim() || "",
+      headers: targetHeaders,
     };
   });
   state.reportFilterValues = values;
@@ -3019,15 +3336,17 @@ function rememberReportFilterValues(state) {
 
 function filterReportRows(state, rows) {
   const filters = Object.values(state.reportFilterValues || {}).filter(filterValueIsActive);
-  if (!filters.length) return [...rows];
-  return rows.filter((row) => filters.every((filter) => rowMatchesReportFilter(row, state.reportHeaders, filter)));
+  const filteredByHeaders = filters.length
+    ? rows.filter((row) => filters.every((filter) => rowMatchesReportFilter(row, state.reportHeaders, filter)))
+    : [...rows];
+  return applySelectionFiltersToRows(getCurrentReport(state), filteredByHeaders, state);
 }
 
 function rowMatchesReportFilter(row, headers, filter) {
   if (filter.type === "amount-range") {
     const min = filter.min === "" ? null : Number(filter.min);
     const max = filter.max === "" ? null : Number(filter.max);
-    const amountHeaders = headers.filter(isAmountHeader);
+    const amountHeaders = filter.headers?.length ? filter.headers : headers.filter(isAmountHeader);
     return amountHeaders.some((header) => {
       const value = coerceChartNumber(row[header]);
       if (value === null) return false;
@@ -3037,22 +3356,94 @@ function rowMatchesReportFilter(row, headers, filter) {
     });
   }
 
+  if (filter.type === "date-condition") {
+    const operator = filter.operator || "";
+    if (!operator) return true;
+    const value = normalizeDateFilterValue(filter.value);
+    const valueTo = normalizeDateFilterValue(filter.valueTo);
+    const matchingHeaders = headersForFilter(filter.label, headers, filter.headers);
+    return matchingHeaders.some((header) => {
+      const rowValue = normalizeDateFilterValue(row[header]);
+      if (!rowValue) return false;
+      switch (operator) {
+        case "eq":
+          return Boolean(value) && rowValue === value;
+        case "gt":
+          return Boolean(value) && rowValue > value;
+        case "gte":
+          return Boolean(value) && rowValue >= value;
+        case "lt":
+          return Boolean(value) && rowValue < value;
+        case "lte":
+          return Boolean(value) && rowValue <= value;
+        case "between":
+          if (!value && !valueTo) return true;
+          if (value && rowValue < value) return false;
+          if (valueTo && rowValue > valueTo) return false;
+          return true;
+        default:
+          return true;
+      }
+    });
+  }
+
+  if (filter.type === "number-condition") {
+    const operator = filter.operator || "";
+    if (!operator) return true;
+    const value = filter.value === "" ? null : Number(filter.value);
+    const valueTo = filter.valueTo === "" ? null : Number(filter.valueTo);
+    const matchingHeaders = headersForFilter(filter.label, headers, filter.headers);
+    return matchingHeaders.some((header) => {
+      const numeric = coerceChartNumber(row[header]);
+      if (numeric === null) return false;
+      switch (operator) {
+        case "eq":
+          return value !== null && numeric === value;
+        case "gt":
+          return value !== null && numeric > value;
+        case "gte":
+          return value !== null && numeric >= value;
+        case "lt":
+          return value !== null && numeric < value;
+        case "lte":
+          return value !== null && numeric <= value;
+        case "between":
+          if (value === null && valueTo === null) return true;
+          if (value !== null && numeric < value) return false;
+          if (valueTo !== null && numeric > valueTo) return false;
+          return true;
+        default:
+          return true;
+      }
+    });
+  }
+
   if (filter.type === "multiselect") {
     const selectedValues = (filter.values || []).map((value) => normalizeText(value)).filter(Boolean);
     if (!selectedValues.length) return true;
-    const matchingHeaders = headersForFilter(filter.label, headers);
+    const matchingHeaders = headersForFilter(filter.label, headers, filter.headers);
     return matchingHeaders.some((header) => selectedValues.includes(normalizeText(row[header] ?? "")));
   }
 
   const needle = String(filter.value || "").toLowerCase();
   if (!needle) return true;
-  const matchingHeaders = headersForFilter(filter.label, headers);
+  const matchingHeaders = headersForFilter(filter.label, headers, filter.headers);
   return matchingHeaders.some((header) => String(row[header] ?? "").toLowerCase().includes(needle));
 }
 
 function filterValueIsActive(filter) {
   if (!filter) return false;
   if (filter.type === "amount-range") return filter.min !== "" || filter.max !== "";
+  if (filter.type === "date-condition") {
+    if (!filter.operator) return false;
+    if (filter.operator === "between") return filter.value !== "" || filter.valueTo !== "";
+    return filter.value !== "";
+  }
+  if (filter.type === "number-condition") {
+    if (!filter.operator) return false;
+    if (filter.operator === "between") return filter.value !== "" || filter.valueTo !== "";
+    return filter.value !== "";
+  }
   if (filter.type === "multiselect") return Boolean(filter.values?.length);
   return Boolean(filter.value);
 }
@@ -3063,6 +3454,22 @@ function updateReportFilterMeta(state) {
   const visible = state.reportRows?.length || 0;
   const suffix = source ? `, widoczne ${visible.toLocaleString("pl-PL")} z ${source.toLocaleString("pl-PL")}` : "";
   $("#reportFilterMeta").textContent = active ? `Filtry raportu: ${active} aktywne${suffix}` : `Filtry raportu: brak${suffix}`;
+}
+
+function renderReportFilterIndicator(state) {
+  const report = getCurrentReport(state);
+  const button = $("#reportTableFilterToggle");
+  if (!button) return;
+
+  const supportsHeaderFilters = reportUsesEmbeddedHeaderFilters(report);
+  const activeCount = Object.values(state.reportFilterValues || {}).filter(filterValueIsActive).length;
+  button.hidden = !supportsHeaderFilters;
+  button.disabled = !supportsHeaderFilters;
+  button.classList.toggle("is-active", activeCount > 0);
+  button.classList.toggle("is-inactive", activeCount === 0);
+  button.setAttribute("aria-pressed", activeCount > 0 ? "true" : "false");
+  button.setAttribute("aria-label", activeCount > 0 ? `Aktywne filtry nagłówków: ${activeCount}. Kliknij, aby wyczyścić wszystkie.` : "Brak aktywnych filtrów nagłówków");
+  button.title = activeCount > 0 ? `Aktywne filtry: ${activeCount}. Kliknij, aby wyczyścić wszystkie.` : "Brak aktywnych filtrów nagłówków";
 }
 
 function filterControlType(filter) {
@@ -3076,9 +3483,13 @@ function filterControlType(filter) {
 
 function selectOptionsForFilter(filter, rows, headers) {
   const matchingHeaders = headersForFilter(filter, headers);
+  return selectOptionsForHeaders(matchingHeaders, rows);
+}
+
+function selectOptionsForHeaders(targetHeaders, rows) {
   const options = new Set();
   rows.slice(0, 500).forEach((row) => {
-    matchingHeaders.forEach((header) => {
+    targetHeaders.forEach((header) => {
       const value = String(row[header] ?? "").trim();
       if (value && value.length <= 80) options.add(value);
     });
@@ -3086,7 +3497,11 @@ function selectOptionsForFilter(filter, rows, headers) {
   return [...options].sort((left, right) => left.localeCompare(right, "pl")).slice(0, 80);
 }
 
-function headersForFilter(filter, headers) {
+function headersForFilter(filter, headers, exactHeaders = []) {
+  if (exactHeaders?.length) {
+    const matchingExactHeaders = exactHeaders.filter((header) => headers.includes(header));
+    if (matchingExactHeaders.length) return matchingExactHeaders;
+  }
   const normalizedFilter = normalizeText(filter);
   const aliases = [
     ["budowa", ["budowa", "konto budowy", "realizacja", "miejsce realizacji"]],
@@ -3121,6 +3536,18 @@ function headersForFilter(filter, headers) {
 function isAmountHeader(header) {
   const normalized = normalizeText(header);
   return ["kwota", "brutto", "netto", "vat", "suma", "wartosc", "saldo", "wplyw", "wydatek", "koszt"].some((part) => normalized.includes(part));
+}
+
+function normalizeDateFilterValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return isoMatch[0];
+  const dottedMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (dottedMatch) return `${dottedMatch[3]}-${dottedMatch[2]}-${dottedMatch[1]}`;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 function filterKey(value) {

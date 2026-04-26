@@ -18,6 +18,25 @@ def test_manual_entries_report_finds_entries_without_scheme():
     assert query.notes
 
 
+def test_documents_without_scheme_report_exposes_filter_flags():
+    query = build_report_query("documents-without-scheme", "202603")
+
+    assert "CDN.DokNag AS d" in query.sql
+    assert "CDN.DokPodmioty AS dp" in query.sql
+    assert "CDN.TraNag AS tr" in query.sql
+    assert "CDN.VatNag AS va" in query.sql
+    assert "CDN.DokumentyKSeF AS dk" in query.sql
+    assert "[__flag_brak_kontrahenta]" in query.sql
+    assert "[__flag_brak_kategorii]" in query.sql
+    assert "[__flag_brak_stawki_vat]" in query.sql
+    assert "[__flag_brak_mpk]" in query.sql
+    assert "[__flag_brak_projektu]" in query.sql
+    assert "[__flag_brak_wynika_z_konfiguracji_schematu]" in query.sql
+    assert "d.DoN_DataDok >= '2026-03-01'" in query.sql
+    assert "d.DoN_DataDok < '2026-04-01'" in query.sql
+    assert query.notes
+
+
 def test_construction_site_costs_report_targets_account_500_150():
     query = build_report_query("construction-site-costs", "202603")
 

@@ -20,11 +20,156 @@ def build_report_query(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> OptimaReportQuery:
+    if report_key == "documents-without-scheme":
+        return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
         return _build_manual_entries_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "construction-site-costs":
         return _build_construction_site_costs_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego zapytania SQL dla raportu: {report_key}")
+
+
+def _build_documents_without_scheme_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    where = _period_where("d.DoN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+SELECT
+    d.DoN_NumerPelny AS [Numer dokumentu],
+    d.DoN_NumerObcy AS [Numer obcy],
+    d.DoN_Tytul AS [Tytuł],
+    d.DoN_Dotyczy AS [Dotyczy],
+    CONVERT(varchar(10), d.DoN_DataDok, 23) AS [Data dokumentu],
+    d.DoN_Status AS [Status],
+    d.DoN_Typ AS [Typ],
+    COALESCE(files.FileCount, 0) AS [Liczba plików],
+    d.DoN_DoNID AS [Optima DoNID],
+    CASE WHEN contractor.PodmiotID IS NULL THEN '1' ELSE '0' END AS [__flag_brak_kontrahenta],
+    CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ksef.Kategoria, ''))), '') IS NULL THEN '1' ELSE '0' END AS [__flag_brak_kategorii],
+    CASE
+        WHEN vat.VaNID IS NULL AND tra.TrNID IS NULL AND ksef.DKFID IS NULL THEN '1'
+        WHEN COALESCE(vat.VatRateAvailable, 0) = 0 THEN '1'
+        ELSE '0'
+    END AS [__flag_brak_stawki_vat],
+    CASE WHEN COALESCE(vat.HasControllingSegment, 0) = 0 THEN '1' ELSE '0' END AS [__flag_brak_mpk],
+    CASE WHEN COALESCE(vat.HasControllingSegment, 0) = 0 THEN '1' ELSE '0' END AS [__flag_brak_projektu],
+    CASE WHEN d.DoN_Typ <> 1 THEN '1' ELSE '0' END AS [__flag_nietypowy_typ_dokumentu],
+    CASE WHEN COALESCE(tra.Korekta, vat.Korekta, 0) <> 0 THEN '1' ELSE '0' END AS [__flag_korekta],
+    CASE
+        WHEN NULLIF(LTRIM(RTRIM(COALESCE(tra.Waluta, vat.Waluta, ksef.Waluta, ''))), '') IS NOT NULL
+             AND COALESCE(tra.Waluta, vat.Waluta, ksef.Waluta, '') <> 'PLN'
+        THEN '1'
+        ELSE '0'
+    END AS [__flag_dokument_walutowy],
+    CASE WHEN fixed_asset.IsFixedAsset = 1 THEN '1' ELSE '0' END AS [__flag_srodek_trwaly],
+    CASE
+        WHEN contractor.PodmiotID IS NULL
+          OR NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ksef.Kategoria, ''))), '') IS NULL
+          OR (
+            (vat.VaNID IS NULL AND tra.TrNID IS NULL AND ksef.DKFID IS NULL)
+            OR COALESCE(vat.VatRateAvailable, 0) = 0
+          )
+          OR COALESCE(vat.HasControllingSegment, 0) = 0
+        THEN '1'
+        ELSE '0'
+    END AS [__flag_brak_wynika_z_danych],
+    CASE
+        WHEN contractor.PodmiotID IS NOT NULL
+         AND NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ksef.Kategoria, ''))), '') IS NOT NULL
+         AND NOT (
+            (vat.VaNID IS NULL AND tra.TrNID IS NULL AND ksef.DKFID IS NULL)
+            OR COALESCE(vat.VatRateAvailable, 0) = 0
+         )
+         AND COALESCE(vat.HasControllingSegment, 0) = 1
+        THEN '1'
+        ELSE '0'
+    END AS [__flag_brak_wynika_z_konfiguracji_schematu]
+FROM CDN.DokNag AS d
+OUTER APPLY (
+    SELECT COUNT(*) AS FileCount
+    FROM CDN.DokNagPliki AS p
+    WHERE p.DnP_DoNID = d.DoN_DoNID
+) AS files
+OUTER APPLY (
+    SELECT TOP (1)
+        dp.DoP_PodmiotID AS PodmiotID
+    FROM CDN.DokPodmioty AS dp
+    WHERE dp.DoP_DoNID = d.DoN_DoNID
+    ORDER BY dp.DoP_DoPId DESC
+) AS contractor
+OUTER APPLY (
+    SELECT TOP (1)
+        tr.TrN_TrNID AS TrNID,
+        tr.TrN_Kategoria AS Kategoria,
+        tr.TrN_Waluta AS Waluta,
+        tr.TrN_Korekta AS Korekta
+    FROM CDN.TraNag AS tr
+    WHERE tr.TrN_DnpID = d.DoN_DoNID
+    ORDER BY tr.TrN_TrNID DESC
+) AS tra
+OUTER APPLY (
+    SELECT TOP (1)
+        va.VaN_VaNID AS VaNID,
+        va.VaN_Kategoria AS Kategoria,
+        va.VaN_Waluta AS Waluta,
+        va.VaN_Korekta AS Korekta,
+        CASE WHEN EXISTS (
+            SELECT 1
+            FROM CDN.VatTab AS vt
+            WHERE vt.VaT_VaNID = va.VaN_VaNID
+              AND vt.VaT_Stawka IS NOT NULL
+        ) THEN 1 ELSE 0 END AS VatRateAvailable,
+        CASE WHEN EXISTS (
+            SELECT 1
+            FROM CDN.VatTab AS vt
+            WHERE vt.VaT_VaNID = va.VaN_VaNID
+              AND (
+                NULLIF(LTRIM(RTRIM(vt.VaT_Segment1)), '') IS NOT NULL
+                OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment2)), '') IS NOT NULL
+                OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment3)), '') IS NOT NULL
+                OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment4)), '') IS NOT NULL
+              )
+        ) THEN 1 ELSE 0 END AS HasControllingSegment
+    FROM CDN.VatNag AS va
+    WHERE va.VaN_DnpID = d.DoN_DoNID
+    ORDER BY va.VaN_VaNID DESC
+) AS vat
+OUTER APPLY (
+    SELECT TOP (1)
+        dk.DKF_DKFID AS DKFID,
+        dk.DKF_Kategoria AS Kategoria,
+        dk.DKF_Waluta AS Waluta
+    FROM CDN.DokumentyKSeF AS dk
+    WHERE
+        (tra.TrNID IS NOT NULL AND dk.DKF_TrNId = tra.TrNID)
+        OR (vat.VaNID IS NOT NULL AND dk.DKF_VaNId = vat.VaNID)
+    ORDER BY dk.DKF_DKFID DESC
+) AS ksef
+OUTER APPLY (
+    SELECT TOP (1) 1 AS IsFixedAsset
+    FROM CDN.Trwale AS st
+    WHERE NULLIF(LTRIM(RTRIM(st.SrT_Dokument)), '') IN (
+        NULLIF(LTRIM(RTRIM(d.DoN_NumerPelny)), ''),
+        NULLIF(LTRIM(RTRIM(d.DoN_NumerObcy)), '')
+    )
+) AS fixed_asset
+{where}
+ORDER BY d.DoN_DataDok DESC, d.DoN_DoNID DESC;
+""".strip()
+    return OptimaReportQuery(
+        report_key="documents-without-scheme",
+        sql=sql,
+        notes=(
+            "Raport dokumentów z obiegu bez kompletnego zestawu danych potrzebnych do automatycznego przypisania schematu.",
+            "Flagi filtrów są budowane jawnie z CDN.DokNag, CDN.DokPodmioty, CDN.TraNag, CDN.VatNag, CDN.VatTab, CDN.DokumentyKSeF i CDN.Trwale.",
+            "Brak MPK i brak projektu korzystają z dostępności segmentów controllingowych w CDN.VatTab.",
+        ),
+    )
 
 
 def _build_manual_entries_report(
