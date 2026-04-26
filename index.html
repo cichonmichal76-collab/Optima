@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Optima SQL GUI</title>
-  <link rel="stylesheet" href="web/styles.css?v=20260426-results-toolbar-move">
+  <link rel="stylesheet" href="web/styles.css?v=20260426-year-select-real-years">
 </head>
 <body>
   <div class="app-shell">
@@ -32,7 +32,8 @@
           <label>
             Rok
             <select id="filterYear" aria-label="Rok danych">
-              <option value="">Wszystkie lata</option>
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
             </select>
           </label>
           <label>
@@ -100,6 +101,20 @@
               <span class="connection-step">1. Wgraj plik</span>
               <span class="connection-step">2. Sprawdź wybrany backup</span>
               <span class="connection-step">3. Podłącz bazę</span>
+            </div>
+            <div class="connection-scope" aria-label="Zakres danych do importu">
+              <span class="meta-label">Lata do zaimportowania</span>
+              <div class="connection-year-picker">
+                <label class="connection-year-chip">
+                  <input id="importYear2025" type="checkbox" value="2025" checked>
+                  <span>2025</span>
+                </label>
+                <label class="connection-year-chip">
+                  <input id="importYear2026" type="checkbox" value="2026" checked>
+                  <span>2026</span>
+                </label>
+              </div>
+              <p id="importYearsMeta" class="muted">Domyślnie program analizuje dane z lat 2025 i 2026.</p>
             </div>
             <div class="connection-form">
               <label for="backupPathDisplay">Plik backupu</label>
@@ -450,7 +465,7 @@
     </main>
   </div>
 
-  <script type="module" src="web/app.js?v=20260426-all-reports-template"></script>
+  <script type="module" src="web/app.js?v=20260426-year-select-real-years"></script>
 </body>
 </html>
 

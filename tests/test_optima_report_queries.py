@@ -72,3 +72,63 @@ def test_report_data_falls_back_to_primary_module(monkeypatch):
     assert payload["source"]["source_type"] == "module"
     assert payload["source"]["module"] == "CONTRACTORS"
     assert any("Kartoteka kontrahentów" in note for note in payload["notes"])
+
+
+def test_report_data_defaults_to_scope_2025_2026(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "n.DeN_DataDok >= '2025-01-01'" in sql
+        assert "n.DeN_DataDok < '2027-01-01'" in sql
+        return ["Numer"], [{"Numer": "E/2026/03"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "manual-entries",
+            "report_title": "Dokumenty z dekretem, ale bez schematu",
+            "database": "OptimaAudit_Test",
+        }
+    )
+
+    assert payload["rows"] == [{"Numer": "E/2026/03"}]
+    assert payload["source"]["date_from"] == "2025-01-01"
+    assert payload["source"]["date_to"] == "2026-12-31"
+
+
+def test_report_data_defaults_to_selected_import_year(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "n.DeN_DataDok >= '2025-01-01'" in sql
+        assert "n.DeN_DataDok < '2026-01-01'" in sql
+        return ["Numer"], [{"Numer": "E/2025/03"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "manual-entries",
+            "report_title": "Dokumenty z dekretem, ale bez schematu",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2025"],
+        }
+    )
+
+    assert payload["rows"] == [{"Numer": "E/2025/03"}]
+    assert payload["source"]["allowed_years"] == [2025]
+    assert payload["source"]["date_from"] == "2025-01-01"
+    assert payload["source"]["date_to"] == "2025-12-31"
+
+
+def test_report_data_rejects_year_outside_allowed_scope():
+    try:
+        serve.report_data(
+            {
+                "report": "manual-entries",
+                "report_title": "Dokumenty z dekretem, ale bez schematu",
+                "database": "OptimaAudit_Test",
+                "year": "2024",
+            }
+        )
+    except ValueError as exc:
+        assert "2025 i 2026" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for out-of-range year")

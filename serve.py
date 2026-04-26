@@ -8,6 +8,7 @@ from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -30,6 +31,11 @@ PORT = 8000
 ROOT = Path(__file__).resolve().parent
 MAX_ROWS = 5000
 MAX_SQL_ROWS = 100000
+AVAILABLE_IMPORT_YEARS = (2025, 2026)
+MIN_ALLOWED_YEAR = min(AVAILABLE_IMPORT_YEARS)
+MAX_ALLOWED_YEAR = max(AVAILABLE_IMPORT_YEARS)
+MIN_ALLOWED_DATE = date(MIN_ALLOWED_YEAR, 1, 1)
+MAX_ALLOWED_DATE = date(MAX_ALLOWED_YEAR, 12, 31)
 SQL_KINDS = {
     DataKind.VAT_PURCHASE,
     DataKind.VAT_SALE,
@@ -38,6 +44,105 @@ SQL_KINDS = {
     DataKind.SETTLEMENTS,
     DataKind.BANK,
 }
+
+
+def _normalize_allowed_years(raw_years: Any) -> list[int]:
+    if raw_years in (None, "", [], (), set()):
+        return list(AVAILABLE_IMPORT_YEARS)
+
+    tokens: list[str] = []
+    if isinstance(raw_years, (list, tuple, set)):
+        for item in raw_years:
+            if item in (None, ""):
+                continue
+            tokens.extend(part.strip() for part in str(item).split(","))
+    else:
+        tokens.extend(part.strip() for part in str(raw_years).split(","))
+
+    normalized: list[int] = []
+    for token in tokens:
+        if not token:
+            continue
+        if len(token) != 4 or not token.isdigit():
+            raise ValueError("Lata importu muszą mieć format RRRR.")
+        year_value = int(token)
+        if year_value not in AVAILABLE_IMPORT_YEARS:
+            raise ValueError("Program obsługuje wyłącznie dane z lat 2025 i 2026.")
+        if year_value not in normalized:
+            normalized.append(year_value)
+
+    if not normalized:
+        raise ValueError("Wybierz co najmniej jeden rok z zakresu 2025-2026.")
+    return sorted(normalized)
+
+
+def _normalize_scope_year(year: Any) -> int | None:
+    if year in (None, ""):
+        return None
+    text = str(year).strip()
+    if len(text) != 4 or not text.isdigit():
+        raise ValueError("Rok musi mieć format RRRR, np. 2026.")
+    return int(text)
+
+
+def _normalize_scope_period(period: Any) -> str | None:
+    if period in (None, ""):
+        return None
+    text = str(period).strip()
+    if len(text) != 6 or not text.isdigit():
+        raise ValueError("Okres musi mieć format RRRRMM, np. 202603.")
+    month = int(text[4:])
+    if not 1 <= month <= 12:
+        raise ValueError("Miesiąc w okresie RRRRMM musi być z zakresu 01-12.")
+    return text
+
+
+def _normalize_scope_date(value: str | None, label: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"{label} musi mieć format RRRR-MM-DD.") from exc
+
+
+def _constrain_time_scope(
+    *,
+    allowed_years: Any = None,
+    period: Any = None,
+    year: Any = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[list[int], str | None, int | None, str | None, str | None]:
+    normalized_allowed_years = _normalize_allowed_years(allowed_years)
+    allowed_year_set = set(normalized_allowed_years)
+    min_scope_date = date(min(normalized_allowed_years), 1, 1)
+    max_scope_date = date(max(normalized_allowed_years), 12, 31)
+    allowed_years_label = " i ".join(str(year_value) for year_value in normalized_allowed_years)
+
+    normalized_period = _normalize_scope_period(period)
+    if normalized_period is not None:
+        period_year = int(normalized_period[:4])
+        if period_year not in allowed_year_set:
+            raise ValueError(f"Wybrany okres nie mieści się w latach zaznaczonych do importu ({allowed_years_label}).")
+        return normalized_allowed_years, normalized_period, None, None, None
+
+    normalized_year = _normalize_scope_year(year)
+    if normalized_year is not None:
+        if normalized_year not in allowed_year_set:
+            raise ValueError(f"Wybrany rok nie mieści się w latach zaznaczonych do importu ({allowed_years_label}).")
+        return normalized_allowed_years, None, normalized_year, None, None
+
+    start = _normalize_scope_date(date_from, "Data od")
+    end = _normalize_scope_date(date_to, "Data do")
+    if start or end:
+        start = max(start or min_scope_date, min_scope_date)
+        end = min(end or max_scope_date, max_scope_date)
+        if start > end:
+            raise ValueError("Po ograniczeniu do wybranych lat nie został żaden zakres danych.")
+        return normalized_allowed_years, None, None, start.isoformat(), end.isoformat()
+
+    return normalized_allowed_years, None, None, min_scope_date.isoformat(), max_scope_date.isoformat()
 
 
 class OptimaRequestHandler(SimpleHTTPRequestHandler):
@@ -101,8 +206,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             query = parse_qs(parsed.query)
             server = (query.get("server") or [r".\SQLEXPRESS02"])[0]
             database = (query.get("database") or [""])[0]
+            allowed_years = query.get("allowed_years") or None
             try:
-                self._send_json({"years": list_available_years(server, database)})
+                self._send_json({"years": list_available_years(server, database, allowed_years=allowed_years)})
             except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
                 self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
@@ -300,10 +406,21 @@ def load_sql_preview(payload: dict[str, Any]) -> dict[str, Any]:
 
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    allowed_years = payload.get("allowed_years")
     period = payload.get("period") if data_kind != DataKind.ACCOUNT_PLAN else None
+    year = payload.get("year") if data_kind != DataKind.ACCOUNT_PLAN else None
+    date_from = str(payload.get("date_from") or "").strip() or None
+    date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    allowed_years, period, year, date_from, date_to = _constrain_time_scope(
+        allowed_years=allowed_years,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
-    query = build_optima_sql_query(data_kind, period)
+    query = build_optima_sql_query(data_kind, period, year=year, date_from=date_from, date_to=date_to)
     headers, rows = run_sqlcmd_table(query.sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
 
     notes = [
@@ -323,7 +440,11 @@ def load_sql_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "server": server,
             "database": database,
             "kind": data_kind.value,
+            "allowed_years": allowed_years,
             "period": period,
+            "year": year,
+            "date_from": date_from,
+            "date_to": date_to,
         },
     }
 
@@ -332,11 +453,19 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
     module_code = str(payload.get("module") or payload.get("kind") or "").strip()
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    allowed_years = payload.get("allowed_years")
     period = payload.get("period")
     year = payload.get("year")
     date_from = str(payload.get("date_from") or "").strip() or None
     date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    allowed_years, period, year, date_from, date_to = _constrain_time_scope(
+        allowed_years=allowed_years,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     sql, notes = build_module_query(module_code, period, year=year, date_from=date_from, date_to=date_to)
     headers, rows = run_sqlcmd_table(sql, SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path))
@@ -353,6 +482,7 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "server": server,
             "database": database,
             "module": module_code,
+            "allowed_years": allowed_years,
             "period": period,
             "year": year,
             "date_from": date_from,
@@ -364,11 +494,19 @@ def load_module_preview(payload: dict[str, Any]) -> dict[str, Any]:
 def available_data(payload: dict[str, Any]) -> dict[str, Any]:
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    allowed_years = payload.get("allowed_years")
     period = payload.get("period")
     year = payload.get("year")
     date_from = str(payload.get("date_from") or "").strip() or None
     date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    allowed_years, period, year, date_from, date_to = _constrain_time_scope(
+        allowed_years=allowed_years,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+    )
     _, rows = run_sqlcmd_table(
         build_available_data_sql(period, year=year, date_from=date_from, date_to=date_to),
         SqlcmdConfig(server=server, database=database, sqlcmd_path=sqlcmd_path),
@@ -376,6 +514,7 @@ def available_data(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "server": server,
         "database": database,
+        "allowed_years": allowed_years,
         "period": period,
         "year": year,
         "date_from": date_from,
@@ -390,11 +529,19 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
     report_title = str(payload.get("report_title") or report_key or "Raport SQL").strip()
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    allowed_years = payload.get("allowed_years")
     period = payload.get("period")
     year = payload.get("year")
     date_from = str(payload.get("date_from") or "").strip() or None
     date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    allowed_years, period, year, date_from, date_to = _constrain_time_scope(
+        allowed_years=allowed_years,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     try:
         query = build_report_query(report_key, period, year=year, date_from=date_from, date_to=date_to)
@@ -426,6 +573,7 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
             "report": report_key,
             "module": module_code,
             "source_type": source_type,
+            "allowed_years": allowed_years,
             "period": period,
             "year": year,
             "date_from": date_from,
@@ -496,11 +644,19 @@ def validate_sql_read(payload: dict[str, Any]) -> dict[str, Any]:
     ]
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    allowed_years = payload.get("allowed_years")
     period = payload.get("period")
     year = payload.get("year")
     date_from = str(payload.get("date_from") or "").strip() or None
     date_to = str(payload.get("date_to") or "").strip() or None
     sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+    allowed_years, period, year, date_from, date_to = _constrain_time_scope(
+        allowed_years=allowed_years,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     return validate_excel_against_sql(
         headers=headers,
@@ -554,9 +710,15 @@ ORDER BY create_date DESC, name DESC;
     ]
 
 
-def list_available_years(server: str, database: str, sqlcmd_path: str | None = None) -> list[int]:
+def list_available_years(
+    server: str,
+    database: str,
+    sqlcmd_path: str | None = None,
+    allowed_years: Any = None,
+) -> list[int]:
     if not database:
         return []
+    normalized_allowed_years = set(_normalize_allowed_years(allowed_years))
 
     sql = """
 SET NOCOUNT ON;
@@ -577,9 +739,11 @@ ORDER BY Rok DESC;
     years: list[int] = []
     for row in rows:
         try:
-            years.append(int(row.get("Rok", "")))
+            value = int(row.get("Rok", ""))
         except ValueError:
             continue
+        if value in normalized_allowed_years:
+            years.append(value)
     return years
 
 

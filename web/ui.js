@@ -1050,6 +1050,7 @@ const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [gro
 const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 const FAVORITES_STORAGE_KEY = "optimaAudit.favoriteReports";
+const IMPORT_YEARS_STORAGE_KEY = "optimaAudit.importYears";
 const SIMPLE_STACK_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const SELECTION_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
@@ -1066,6 +1067,89 @@ const EMBEDDED_HEADER_FILTERS = {
     { header: "Optima DoNID", filter: "Optima DoNID", type: "text", placeholder: "Szukaj", headers: ["Optima DoNID"] },
   ],
 };
+
+function defaultImportYears() {
+  return ["2025", "2026"];
+}
+
+function normalizeImportYears(years) {
+  const tokens = Array.isArray(years) ? years : String(years || "").split(",");
+  const normalized = [];
+  for (const token of tokens) {
+    const value = String(token || "").trim();
+    if (!["2025", "2026"].includes(value) || normalized.includes(value)) continue;
+    normalized.push(value);
+  }
+  return normalized.length ? normalized.sort() : defaultImportYears();
+}
+
+function restoreImportYears() {
+  try {
+    const raw = window.localStorage.getItem(IMPORT_YEARS_STORAGE_KEY);
+    return normalizeImportYears(raw ? JSON.parse(raw) : defaultImportYears());
+  } catch (_error) {
+    return defaultImportYears();
+  }
+}
+
+function persistImportYears(years) {
+  try {
+    window.localStorage.setItem(IMPORT_YEARS_STORAGE_KEY, JSON.stringify(normalizeImportYears(years)));
+  } catch (_error) {
+    // Brak localStorage nie blokuje pracy z wybranymi latami w tej sesji.
+  }
+}
+
+function syncImportYearsState(state, years) {
+  state.importYears = normalizeImportYears(years);
+  const import2025 = $("#importYear2025");
+  const import2026 = $("#importYear2026");
+  if (import2025) import2025.checked = state.importYears.includes("2025");
+  if (import2026) import2026.checked = state.importYears.includes("2026");
+}
+
+function getSelectedImportYears(state) {
+  const fromDom = [
+    $("#importYear2025")?.checked ? "2025" : "",
+    $("#importYear2026")?.checked ? "2026" : "",
+  ].filter(Boolean);
+  if (fromDom.length) {
+    const normalized = normalizeImportYears(fromDom);
+    if (state && typeof state === "object") state.importYears = normalized;
+    return normalized;
+  }
+  const normalized = normalizeImportYears(state?.importYears);
+  if (state && typeof state === "object") state.importYears = normalized;
+  return normalized;
+}
+
+function importYearsLabel(years, { compact = false } = {}) {
+  const normalized = normalizeImportYears(years);
+  if (normalized.length === 1) return normalized[0];
+  return compact ? `${normalized[0]}-${normalized[normalized.length - 1]}` : `${normalized[0]} i ${normalized[1]}`;
+}
+
+function defaultTimeFilterYear(state) {
+  const years = getSelectedImportYears(state);
+  if (!years.length) return "";
+  const availableYears = (state?.availableYears || []).map((year) => String(year));
+  const preferredYears = availableYears.filter((year) => years.includes(year));
+  const sourceYears = preferredYears.length ? preferredYears : years;
+  return [...sourceYears].sort().at(-1) || years[0] || "";
+}
+
+function renderImportYearsMeta(state) {
+  const years = getSelectedImportYears(state);
+  const message = years.length === 1
+    ? `Po podłączeniu program będzie analizował dane tylko z roku ${years[0]}.`
+    : `Po podłączeniu program będzie analizował dane z lat ${importYearsLabel(years)}.`;
+  const meta = $("#importYearsMeta");
+  if (meta) meta.textContent = message;
+}
+
+function getAllowedYearsPayload(state) {
+  return { allowed_years: getSelectedImportYears(state) };
+}
 
 function selectedAdminProfile() {
   const code = $("#adminValidationKind")?.value || ADMIN_EXPORT_PROFILES[0]?.code || "";
@@ -1120,12 +1204,16 @@ function refreshAdminProfileInputs() {
 }
 
 export function initApp(state) {
+  syncImportYearsState(state, restoreImportYears());
+  renderYearOptions(state, defaultTimeFilterYear(state));
   populateAdminValidationProfiles();
   refreshAdminProfileInputs();
   state.favoriteReports = restoreFavoriteReports();
   renderSideMenu(state);
   renderStartFavorites(state);
   bindEvents(state);
+  renderImportYearsMeta(state);
+  updateConnectBackupButtonState(state);
   renderAdministration(state);
   renderActiveReport(state);
   renderReportData(state);
@@ -1133,7 +1221,7 @@ export function initApp(state) {
   renderOptimaFilter(state);
   renderReportChart(state);
   renderCurrentView(state);
-  updateTimeFilterMeta();
+  updateTimeFilterMeta(state);
   updateBadges(state);
   restoreKnownDatabase(state);
 }
@@ -1150,6 +1238,8 @@ function bindCommunicationEvents(state) {
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
   $("#sqlDatabase").addEventListener("change", () => handleDatabaseSelectionChange(state));
+  $("#importYear2025").addEventListener("change", () => handleImportYearsChange(state));
+  $("#importYear2026").addEventListener("change", () => handleImportYearsChange(state));
   $("#filterYear").addEventListener("focus", () => ensureAvailableYearsLoaded(state));
   $("#filterYear").addEventListener("pointerdown", () => ensureAvailableYearsLoaded(state));
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
@@ -1292,11 +1382,63 @@ function selectView(state, viewKey) {
   activateStaticView(state, viewKey === "communication" ? "communication" : "start");
 }
 
+function clonePlainValue(value) {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function emptyInteractiveReportState() {
+  return {
+    reportChartEnabled: false,
+    reportFilterValues: {},
+    reportControlSelections: {},
+    reportAlertSelections: {},
+    reportColumnOrder: [],
+    reportHiddenColumns: {},
+  };
+}
+
+function interactiveReportStateSnapshot(state) {
+  return {
+    reportChartEnabled: Boolean(state.reportChartEnabled),
+    reportFilterValues: clonePlainValue(state.reportFilterValues || {}),
+    reportControlSelections: clonePlainValue(state.reportControlSelections || {}),
+    reportAlertSelections: clonePlainValue(state.reportAlertSelections || {}),
+    reportColumnOrder: clonePlainValue(state.reportColumnOrder || []),
+    reportHiddenColumns: clonePlainValue(state.reportHiddenColumns || {}),
+  };
+}
+
+function saveInteractiveReportState(state, reportKey = state.currentReportKey) {
+  if (!reportKey || !REPORTS_BY_KEY[reportKey]) return;
+  state.reportInteractiveStates = state.reportInteractiveStates || {};
+  state.reportInteractiveStates[reportKey] = interactiveReportStateSnapshot(state);
+}
+
+function restoreInteractiveReportState(state, reportKey, { reset = false } = {}) {
+  const savedState = !reset ? state.reportInteractiveStates?.[reportKey] : null;
+  const nextState = {
+    ...emptyInteractiveReportState(),
+    ...(savedState ? clonePlainValue(savedState) : {}),
+  };
+  state.reportChartEnabled = Boolean(nextState.reportChartEnabled);
+  state.reportFilterValues = nextState.reportFilterValues || {};
+  state.reportControlSelections = nextState.reportControlSelections || {};
+  state.reportAlertSelections = nextState.reportAlertSelections || {};
+  state.reportColumnOrder = nextState.reportColumnOrder || [];
+  state.reportHiddenColumns = nextState.reportHiddenColumns || {};
+  state.reportToolbarMenuOpen = "";
+  clearOptimaFilterState(state);
+}
+
 function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
+  if (state.currentReportKey && REPORTS_BY_KEY[state.currentReportKey]) {
+    saveInteractiveReportState(state, state.currentReportKey);
+  }
   state.currentReportKey = reportKey;
   state.expandedSidebarGroupId = getReportGroupId(reportKey);
-  resetInteractiveReportState(state);
+  restoreInteractiveReportState(state, reportKey);
   clearReportData(state);
   activateReportView(state, { loadData: true });
 }
@@ -1308,13 +1450,7 @@ function toggleReportGroup(state, groupId) {
 }
 
 function resetInteractiveReportState(state) {
-  state.reportFilterValues = {};
-  state.reportControlSelections = {};
-  state.reportAlertSelections = {};
-  state.reportColumnOrder = [];
-  state.reportHiddenColumns = {};
-  state.reportToolbarMenuOpen = "";
-  clearOptimaFilterState(state);
+  restoreInteractiveReportState(state, state.currentReportKey, { reset: true });
 }
 
 function activateReportView(state, { loadData = false } = {}) {
@@ -1369,6 +1505,7 @@ async function ensureDatabaseAvailable(state) {
     text: "Aplikacja korzysta z wcześniej podłączonej lokalnej kopii SQL.",
     details: [
       ["Baza", detectedDatabase],
+      ["Zakres danych", importYearsLabel(getSelectedImportYears(state))],
       ["Tryb", "Tylko do odczytu"],
     ],
   });
@@ -1464,11 +1601,51 @@ function setBackupInfo({ tone = "idle", title, text, details = [] }) {
   `;
 }
 
+function updateConnectBackupButtonState(state) {
+  const path = $("#backupPath").value.trim();
+  const hasYears = getSelectedImportYears(state).length > 0;
+  $("#connectBackup").disabled = !(path && hasYears);
+}
+
+async function handleImportYearsChange(state) {
+  const selectedYears = [
+    $("#importYear2025")?.checked ? "2025" : "",
+    $("#importYear2026")?.checked ? "2026" : "",
+  ].filter(Boolean);
+
+  if (!selectedYears.length) {
+    syncImportYearsState(state, state.importYears);
+    setBackupMeta("Wybierz co najmniej jeden rok do importu.", "error");
+    renderImportYearsMeta(state);
+    updateConnectBackupButtonState(state);
+    return;
+  }
+
+  syncImportYearsState(state, selectedYears);
+  persistImportYears(state.importYears);
+  renderImportYearsMeta(state);
+  renderYearOptions(state, defaultTimeFilterYear(state));
+  updateTimeFilterMeta(state);
+  updateConnectBackupButtonState(state);
+
+  if (!$("#sqlDatabase").value.trim()) {
+    renderAdministration(state);
+    return;
+  }
+
+  await loadAvailableYears(state);
+  $("#filterYear").value = defaultTimeFilterYear(state);
+  $("#filterMonth").value = defaultMonthValue();
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  await applyTimeFilter(state);
+}
+
 async function scanBackups(state) {
   const initialPath = $("#backupPath").value.trim() || $("#backupPathDisplay").value.trim();
   $("#backupPath").value = "";
   $("#backupPathDisplay").value = "";
-  $("#connectBackup").disabled = true;
+  updateConnectBackupButtonState(state);
   setBackupMeta("Otwieram okno wyboru pliku backupu...");
   setBackupInfo({
     tone: "loading",
@@ -1495,7 +1672,7 @@ async function scanBackups(state) {
       return;
     }
     state.backups = [payload];
-    selectNewestBackup(state.backups);
+    selectNewestBackup(state, state.backups);
   } catch (error) {
     setBackupMeta(`Nie udało się wczytać pliku: ${error.message}`, "error");
     setBackupInfo({
@@ -1515,10 +1692,12 @@ async function readJsonResponse(response, fallbackMessage) {
   }
 }
 
-function selectNewestBackup(backups) {
+function selectNewestBackup(state, backups) {
   const selected = backups[0];
   if (!selected) {
     $("#backupPathDisplay").value = "";
+    $("#backupPath").value = "";
+    updateConnectBackupButtonState(state);
     setBackupMeta("Nie znaleziono poprawnego pliku .BAK lub .BAC.", "error");
     setBackupInfo({
       tone: "error",
@@ -1529,22 +1708,24 @@ function selectNewestBackup(backups) {
   }
   $("#backupPath").value = selected.path;
   $("#backupPathDisplay").value = selected.path;
-  $("#connectBackup").disabled = false;
+  updateConnectBackupButtonState(state);
   setBackupMeta(`Wybrano plik ${selected.name} (${selected.size_mb} MB).`, "success");
   setBackupInfo({
     tone: "success",
     title: "Backup gotowy do podłączenia",
     text: "Plik został poprawnie wskazany. Możesz teraz uruchomić podłączenie lokalnej kopii bazy.",
     details: [
-      ["Plik", selected.path],
-      ["Rozmiar", `${selected.size_mb} MB`],
-      ["Tryb", "Tylko do odczytu"],
-    ],
-  });
+        ["Plik", selected.path],
+        ["Rozmiar", `${selected.size_mb} MB`],
+        ["Zakres danych", importYearsLabel(getSelectedImportYears(state))],
+        ["Tryb", "Tylko do odczytu"],
+      ],
+    });
 }
 
 async function connectBackup(state) {
   const path = $("#backupPath").value.trim();
+  const importYears = getSelectedImportYears(state);
   const previousDatabase = $("#sqlDatabase").value.trim();
   if (!path) {
     setBackupMeta("Najpierw kliknij „Wgraj plik” i wskaż backup.", "error");
@@ -1552,6 +1733,15 @@ async function connectBackup(state) {
       tone: "error",
       title: "Brak wybranego backupu",
       text: "Wskaż plik .BAK lub .BAC, aby rozpocząć podłączanie bazy.",
+    });
+    return;
+  }
+  if (!importYears.length) {
+    setBackupMeta("Wybierz co najmniej jeden rok do importu.", "error");
+    setBackupInfo({
+      tone: "error",
+      title: "Brak zakresu importu",
+      text: "Zaznacz co najmniej jeden rok, który ma zostać uwzględniony w analizie.",
     });
     return;
   }
@@ -1578,6 +1768,7 @@ async function connectBackup(state) {
       details: [
         ["Docelowa baza", request.target_database],
         ["Źródło", path],
+        ["Zakres danych", importYearsLabel(importYears)],
         ["Tryb", "Tylko do odczytu"],
       ],
     });
@@ -1598,11 +1789,12 @@ async function connectBackup(state) {
       details: [
         ["Baza", payload.database],
         ["Plik źródłowy", payload.source_path],
+        ["Zakres danych", importYearsLabel(importYears)],
         ["Tryb", "Tylko do odczytu"],
       ],
     });
     updateBadges(state);
-    updateTimeFilterMeta();
+    updateTimeFilterMeta(state);
     await loadAvailableYears(state);
     await loadAvailableData(state);
     await loadActiveReportData(state);
@@ -1620,7 +1812,7 @@ async function connectBackup(state) {
       details: path ? [["Plik", path]] : [],
     });
   } finally {
-    $("#connectBackup").disabled = !$("#backupPath").value.trim();
+    updateConnectBackupButtonState(state);
   }
 }
 
@@ -1650,7 +1842,8 @@ async function loadAvailableData(state) {
   const request = {
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
-    ...getTimeFilterPayload(),
+    ...getAllowedYearsPayload(state),
+    ...getTimeFilterPayload(state),
   };
   try {
     const response = await fetch("/api/available-data", {
@@ -1685,21 +1878,26 @@ async function loadAvailableYears(state) {
     const query = new URLSearchParams({
       server: $("#sqlServer").value.trim(),
       database,
+      allowed_years: getSelectedImportYears(state).join(","),
     });
     const response = await fetch(`/api/years?${query.toString()}`);
     const payload = await response.json();
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się pobrać lat z bazy.");
 
     state.availableYears = (payload.years || []).map((year) => String(year));
+    const fallbackYear = defaultTimeFilterYear(state);
     const selectedYear = state.availableYears.includes(currentYear)
       ? currentYear
-      : defaultYearFromDatabase(state.availableYears);
+      : state.availableYears.includes(fallbackYear)
+        ? fallbackYear
+        : "";
     renderYearOptions(state, selectedYear);
-    updateTimeFilterMeta();
+    updateTimeFilterMeta(state);
     renderAdministration(state);
   } catch (_error) {
     state.availableYears = [];
     renderYearOptions(state, currentYear);
+    updateTimeFilterMeta(state);
     renderAdministration(state);
   }
 }
@@ -1713,14 +1911,23 @@ async function ensureAvailableYearsLoaded(state) {
 }
 
 function renderYearOptions(state, selectedYear) {
-  const years = state.availableYears || [];
-  const fallback = selectedYear && !years.includes(selectedYear) ? [selectedYear] : [];
-  const options = ["", ...fallback, ...years];
-  const html = options.map((year) => {
-    const label = year ? year : "Wszystkie lata";
-    const selected = year === selectedYear ? " selected" : "";
-    return `<option value="${escapeHtml(year)}"${selected}>${escapeHtml(label)}</option>`;
-  }).join("");
+  const availableYears = (state.availableYears || []).map((year) => String(year)).filter(Boolean);
+  const importYears = getSelectedImportYears(state).map((year) => String(year)).filter(Boolean);
+  const years = [...new Set((availableYears.length ? availableYears : importYears))].sort();
+  const preferredYear = selectedYear && years.includes(String(selectedYear))
+    ? String(selectedYear)
+    : defaultTimeFilterYear(state);
+  const effectiveSelectedYear = years.includes(preferredYear)
+    ? preferredYear
+    : years.at(-1) || "";
+
+  const html = years.length
+    ? years.map((year) => {
+      const selected = year === effectiveSelectedYear ? " selected" : "";
+      return `<option value="${escapeHtml(year)}"${selected}>${escapeHtml(year)}</option>`;
+    }).join("")
+    : '<option value="">Brak lat</option>';
+
   $("#filterYear").innerHTML = html;
 }
 
@@ -1752,7 +1959,7 @@ async function loadActiveReportData(state) {
   state.reportDataKey = report.key;
   renderReportData(state);
 
-  const request = buildReportDataRequest(report);
+  const request = buildReportDataRequest(report, state);
 
   try {
     const response = await fetch("/api/report-data", {
@@ -1770,14 +1977,15 @@ async function loadActiveReportData(state) {
   }
 }
 
-function buildReportDataRequest(report) {
+function buildReportDataRequest(report, state) {
   return {
     report: report.queryKey,
     report_title: report.title,
     module: report.primaryModule,
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
-    ...getTimeFilterPayload(),
+    ...getAllowedYearsPayload(state),
+    ...getTimeFilterPayload(state),
   };
 }
 
@@ -1885,25 +2093,27 @@ function updateBadges(state) {
 }
 
 async function applyTimeFilter(state) {
-  updateTimeFilterMeta();
+  updateTimeFilterMeta(state);
   await loadAvailableData(state);
   await loadActiveReportData(state);
   renderAdministration(state);
 }
 
 async function clearTimeFilters(state) {
-  $("#filterYear").value = defaultYearFromDatabase(state.availableYears || []);
+  $("#filterYear").value = defaultTimeFilterYear(state);
   $("#filterMonth").value = defaultMonthValue();
   $("#filterDateFrom").value = "";
   $("#filterDateTo").value = "";
   await applyTimeFilter(state);
 }
 
-function getTimeFilterPayload() {
-  const year = $("#filterYear").value.trim();
+function getTimeFilterPayload(state) {
+  const selectedYear = $("#filterYear").value.trim();
   const month = $("#filterMonth").value;
   const dateFrom = $("#filterDateFrom").value;
   const dateTo = $("#filterDateTo").value;
+  const fallbackYear = defaultTimeFilterYear(state);
+  const year = selectedYear || (month ? fallbackYear : "");
 
   if (dateFrom || dateTo) {
     return { date_from: dateFrom, date_to: dateTo };
@@ -1917,12 +2127,12 @@ function getTimeFilterPayload() {
   return {};
 }
 
-function updateTimeFilterMeta() {
-  const description = describeTimeFilter();
+function updateTimeFilterMeta(state) {
+  const description = describeTimeFilter(state);
   $("#timeFilterMeta").textContent = `Filtr: ${description}`;
 }
 
-function describeTimeFilter() {
+function describeTimeFilter(state) {
   const year = $("#filterYear").value.trim();
   const month = $("#filterMonth").value;
   const monthLabel = $("#filterMonth").selectedOptions[0]?.textContent.toLowerCase() || "";
@@ -1936,7 +2146,8 @@ function describeTimeFilter() {
   }
   if (year && month) return `${monthLabel} ${year}`;
   if (year) return `rok ${year}`;
-  return "bez ograniczenia dat";
+  const importYears = getSelectedImportYears(state);
+  return importYears.length === 1 ? `rok ${importYears[0]}` : `lata ${importYears[0]}-${importYears[importYears.length - 1]}`;
 }
 
 function renderSideMenu(state) {
@@ -2014,7 +2225,7 @@ function renderAdministration(state) {
     `).join("");
   }
   if (runButton) runButton.disabled = !profile || !ADMIN_SQL_VALIDATION_KINDS.has(profile.code);
-  $("#adminFilterMeta").textContent = `Filtr globalny: ${describeTimeFilter()}`;
+  $("#adminFilterMeta").textContent = `Filtr globalny: ${describeTimeFilter(state)}`;
   if (uploadMeta) uploadMeta.textContent = adminUploadMetaText(state);
   if (previewMeta) {
     previewMeta.textContent = state.adminSourceFileName
@@ -2112,7 +2323,8 @@ async function runAdminValidation(state) {
     rows: state.adminSourceFile.rows || [],
     server: $("#sqlServer").value.trim(),
     database: $("#sqlDatabase").value.trim(),
-    ...getTimeFilterPayload(),
+    ...getAllowedYearsPayload(state),
+    ...getTimeFilterPayload(state),
   };
 
   try {
@@ -2775,6 +2987,7 @@ function toggleFavoriteReport(state) {
 
 function toggleReportChart(state) {
   state.reportChartEnabled = !state.reportChartEnabled;
+  saveInteractiveReportState(state);
   renderReportActions(state);
   renderReportChart(state);
 }
@@ -2955,6 +3168,29 @@ function selectionFilterField(label) {
   return `__flag_${filterKey(label)}`;
 }
 
+const SELECTION_SUBJECT_DEFINITIONS = [
+  ["kategoria", ["kategoria", "kategorii"]],
+  ["kontrahent", ["kontrahent", "kontrahenta", "dostawca", "dostawcy", "odbiorca", "odbiorcy", "klient", "klienta", "podmiot", "podmiotu"]],
+  ["stawka vat", ["stawka vat", "stawki vat", "vat"]],
+  ["mpk", ["mpk"]],
+  ["projekt", ["projekt", "projektu"]],
+  ["schemat", ["schemat", "schematu"]],
+  ["dekret", ["dekret", "dekretu", "dekretacja", "dekretacji"]],
+  ["kurs", ["kurs", "kursu"]],
+  ["akceptacja", ["akceptacja", "akceptacji"]],
+  ["osoba akceptujaca", ["osoba akceptujaca", "osoby akceptujacej"]],
+  ["opis", ["opis", "opisu", "opis merytoryczny"]],
+  ["ksef", ["ksef", "numer ksef"]],
+  ["nip", ["nip"]],
+  ["kraj", ["kraj", "kraju"]],
+  ["adres", ["adres", "adresu"]],
+  ["rachunek bankowy", ["rachunek bankowy", "rachunku bankowego", "rachunek", "rachunku"]],
+  ["czas pracy", ["czas pracy", "ewidencja czasu"]],
+].map(([canonical, variants]) => ({
+  canonical,
+  variants: variants.map((variant) => normalizeText(variant).split(" ").filter(Boolean)),
+}));
+
 function rowHasSelectionFlag(row, label) {
   const value = String(row?.[selectionFilterField(label)] ?? "").trim().toLowerCase();
   return value === "1" || value === "true" || value === "tak" || value === "yes";
@@ -2977,16 +3213,103 @@ function rowMatchesSelectionCriterion(row, headers, label) {
     return rowHasSelectionFlag(row, label);
   }
 
+  if (rowMatchesMissingSelectionSubjects(row, headers, label)) return true;
+  return rowMatchesTextualSelectionCriterion(row, headers, label);
+}
+
+function rowMatchesMissingSelectionSubjects(row, headers, label) {
+  const subjects = extractMissingSelectionSubjects(label);
+  if (!subjects.length) return false;
+  return subjects.some((subject) => {
+    const matchingHeaders = headersForFilter(subject, headers, [], { fallbackToAll: false });
+    if (!matchingHeaders.length) return false;
+    return matchingHeaders.some((header) => valueLooksMissing(row?.[header]));
+  });
+}
+
+function extractMissingSelectionSubjects(label) {
+  const tokens = normalizeText(label).split(" ").filter(Boolean);
+  const subjects = [];
+  const stopTokens = new Set(["wynika", "wymaga", "wymagaja", "spojrzec", "najpierw", "ocena", "pokazuje"]);
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (!["brak", "bez"].includes(tokens[index])) continue;
+    const segment = [];
+    for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
+      const token = tokens[cursor];
+      if (["brak", "bez"].includes(token) || stopTokens.has(token)) break;
+      segment.push(token);
+    }
+    subjects.push(...selectionSubjectsFromTokens(segment));
+  }
+  return [...new Set(subjects)];
+}
+
+function selectionSubjectsFromTokens(tokens) {
+  const subjects = [];
+  const separators = new Set(["lub", "oraz", "albo", "i", "czy", "z", "ze", "na", "do"]);
+  for (let index = 0; index < tokens.length;) {
+    if (separators.has(tokens[index])) {
+      index += 1;
+      continue;
+    }
+    const match = matchSelectionSubject(tokens, index);
+    if (match) {
+      subjects.push(match.canonical);
+      index += match.length;
+      continue;
+    }
+    index += 1;
+  }
+  return subjects;
+}
+
+function matchSelectionSubject(tokens, startIndex) {
+  for (const subject of SELECTION_SUBJECT_DEFINITIONS) {
+    for (const variant of subject.variants) {
+      const matches = variant.every((token, offset) => tokens[startIndex + offset] === token);
+      if (matches) return { canonical: subject.canonical, length: variant.length };
+    }
+  }
+  return null;
+}
+
+function valueLooksMissing(value) {
+  const normalized = normalizeText(value);
+  return !normalized || ["brak", "nie dotyczy", "nd", "null", "none"].includes(normalized);
+}
+
+function rowMatchesTextualSelectionCriterion(row, headers, label) {
   const haystack = normalizeText(
     headers
       .filter((header) => !String(header || "").startsWith("__flag_"))
       .map((header) => `${header} ${row?.[header] ?? ""}`)
       .join(" "),
   );
-  const keywords = keywordsFromText(label).filter((keyword) => !["oraz", "wedlug", "ktore", "ktorych", "lista", "raport"].includes(keyword));
+  const keywords = selectionKeywordsForTextMatch(label);
   if (!keywords.length) return false;
   if (keywords.length === 1) return haystack.includes(keywords[0]);
   return keywords.filter((keyword) => haystack.includes(keyword)).length >= Math.min(2, keywords.length);
+}
+
+function selectionKeywordsForTextMatch(label) {
+  return [...new Set(
+    keywordsFromText(label).filter((keyword) => ![
+      "oraz",
+      "wedlug",
+      "ktore",
+      "ktorych",
+      "lista",
+      "raport",
+      "dokument",
+      "dokumenty",
+      "faktura",
+      "faktury",
+      "ocena",
+      "czy",
+      "jest",
+      "sa",
+    ].includes(keyword)),
+  )];
 }
 
 function renderLayoutEditor(state) {
@@ -3012,10 +3335,12 @@ function renderLayoutEditor(state) {
 function rememberControlSelections(state) {
   state.reportControlSelections = rememberSelectableValues("#reportControls");
   updateReportNarrativeMeta(state);
+  saveInteractiveReportState(state);
 }
 
 function rememberAlertSelections(state) {
   state.reportAlertSelections = rememberSelectableValues("#reportAlerts");
+  saveInteractiveReportState(state);
 }
 
 function rememberSelectableValues(containerSelector) {
@@ -3033,6 +3358,7 @@ function rememberColumnVisibility(state) {
   });
   state.reportHiddenColumns = hidden;
   ensureVisibleColumns(state);
+  saveInteractiveReportState(state);
 }
 
 function moveReportColumn(state, header, direction) {
@@ -3044,6 +3370,7 @@ function moveReportColumn(state, header, direction) {
   if (target < 0 || target >= current.length) return;
   [current[index], current[target]] = [current[target], current[index]];
   state.reportColumnOrder = current;
+  saveInteractiveReportState(state);
   $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
   renderReportData(state);
 }
@@ -3139,7 +3466,7 @@ function keywordsFromText(text) {
   const extras = [];
   if (words.includes("vat")) extras.push("stawka", "kwota", "problem", "rekomendacja");
   if (words.includes("saldo")) extras.push("saldo", "kwota");
-  if (words.includes("walutowa") || words.includes("kursu") || words.includes("waluta")) extras.push("waluta", "kurs");
+  if (words.some((word) => word.startsWith("walut")) || words.includes("kursu") || words.includes("waluta")) extras.push("waluta", "kurs");
   if (words.includes("bank")) extras.push("opis", "operacji", "konto");
   if (words.includes("platnosci") || words.includes("platnosc")) extras.push("status", "termin", "kwota");
   return [...new Set([...words, ...extras])];
@@ -3231,6 +3558,7 @@ function clearReportSpecificFilters(state) {
   renderReportFilterControls(getCurrentReport(state), state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
   setOptimaFilterLoading(state);
+  saveInteractiveReportState(state);
   renderReportData(state);
   refreshOptimaFilter(state);
 }
@@ -3268,7 +3596,7 @@ function clearSingleReportFilterField(field) {
 
 function rememberReportFilterValues(state) {
   const values = {};
-  document.querySelectorAll("[data-report-filter]").forEach((field) => {
+  document.querySelectorAll("#reportFilterFields [data-report-filter], #reportDataHead [data-report-filter]").forEach((field) => {
     const key = field.dataset.reportFilter;
     const type = field.dataset.filterType;
     const targetHeaders = (field.dataset.filterHeaders || "")
@@ -3331,6 +3659,7 @@ function rememberReportFilterValues(state) {
     };
   });
   state.reportFilterValues = values;
+  saveInteractiveReportState(state);
   updateReportFilterMeta(state);
 }
 
@@ -3461,7 +3790,7 @@ function renderReportFilterIndicator(state) {
   const button = $("#reportTableFilterToggle");
   if (!button) return;
 
-  const supportsHeaderFilters = reportUsesEmbeddedHeaderFilters(report);
+  const supportsHeaderFilters = reportHasRenderedHeaderFilters(state, report);
   const activeCount = Object.values(state.reportFilterValues || {}).filter(filterValueIsActive).length;
   button.hidden = !supportsHeaderFilters;
   button.disabled = !supportsHeaderFilters;
@@ -3470,6 +3799,14 @@ function renderReportFilterIndicator(state) {
   button.setAttribute("aria-pressed", activeCount > 0 ? "true" : "false");
   button.setAttribute("aria-label", activeCount > 0 ? `Aktywne filtry nagłówków: ${activeCount}. Kliknij, aby wyczyścić wszystkie.` : "Brak aktywnych filtrów nagłówków");
   button.title = activeCount > 0 ? `Aktywne filtry: ${activeCount}. Kliknij, aby wyczyścić wszystkie.` : "Brak aktywnych filtrów nagłówków";
+}
+
+function reportHasRenderedHeaderFilters(state, report) {
+  if (!reportUsesEmbeddedHeaderFilters(report)) return false;
+  if (state.reportDataStatus !== "ready" || state.reportDataKey !== report?.key) return false;
+  const headers = getVisibleReportHeaders(state);
+  if (!headers.length) return false;
+  return embeddedHeaderFiltersForReport(report, headers).length > 0;
 }
 
 function filterControlType(filter) {
@@ -3488,16 +3825,16 @@ function selectOptionsForFilter(filter, rows, headers) {
 
 function selectOptionsForHeaders(targetHeaders, rows) {
   const options = new Set();
-  rows.slice(0, 500).forEach((row) => {
+  rows.forEach((row) => {
     targetHeaders.forEach((header) => {
       const value = String(row[header] ?? "").trim();
       if (value && value.length <= 80) options.add(value);
     });
   });
-  return [...options].sort((left, right) => left.localeCompare(right, "pl")).slice(0, 80);
+  return [...options].sort((left, right) => left.localeCompare(right, "pl"));
 }
 
-function headersForFilter(filter, headers, exactHeaders = []) {
+function headersForFilter(filter, headers, exactHeaders = [], { fallbackToAll = true } = {}) {
   if (exactHeaders?.length) {
     const matchingExactHeaders = exactHeaders.filter((header) => headers.includes(header));
     if (matchingExactHeaders.length) return matchingExactHeaders;
@@ -3530,7 +3867,7 @@ function headersForFilter(filter, headers, exactHeaders = []) {
     const normalizedHeader = normalizeText(header);
     return needles.some((needle) => normalizedHeader.includes(needle));
   });
-  return result.length ? result : headers;
+  return result.length ? result : (fallbackToAll ? headers : []);
 }
 
 function isAmountHeader(header) {

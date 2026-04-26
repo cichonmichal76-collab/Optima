@@ -100,8 +100,21 @@ def test_list_available_years_reads_distinct_years(monkeypatch):
     def fake_run_sqlcmd_table(sql, config):
         assert "CDN.VatNag" in sql
         assert config.database == "OptimaAudit_Test"
-        return ["Rok"], [{"Rok": "2026"}, {"Rok": "bad"}]
+        return ["Rok"], [{"Rok": "2027"}, {"Rok": "2026"}, {"Rok": "2025"}, {"Rok": "2024"}, {"Rok": "bad"}]
 
     monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
 
-    assert serve.list_available_years(r".\SQLEXPRESS02", "OptimaAudit_Test") == [2026]
+    assert serve.list_available_years(r".\SQLEXPRESS02", "OptimaAudit_Test") == [2026, 2025]
+
+
+def test_list_available_years_respects_selected_import_years(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        return ["Rok"], [{"Rok": "2026"}, {"Rok": "2025"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    assert serve.list_available_years(
+        r".\SQLEXPRESS02",
+        "OptimaAudit_Test",
+        allowed_years=["2025"],
+    ) == [2025]
