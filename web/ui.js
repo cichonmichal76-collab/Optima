@@ -770,6 +770,27 @@ const REPORT_GROUPS = [
     title: "Projekty / MPK / B+R",
     reports: [
       {
+        key: "construction-site-costs",
+        title: "Koszty i dokumenty według budów 500-150",
+        section: "Projekty / MPK / B+R",
+        summary: "Raport budów oparty o dekrety na kontach 500-150. Pokazuje dokumenty, kontrahentów, opisy kosztów i kwoty przypisane do wybranych miejsc realizacji usług.",
+        question: "Jakie dokumenty i koszty są przypisane do zaznaczonych budów z kont 500-150?",
+        priority: "Wysoki",
+        queryKey: "construction-site-costs",
+        sources: ["Optima", "Księga"],
+        filters: ["Okres od-do", "Budowa", "Kontrahent", "Typ dokumentu", "Kwota od-do"],
+        tags: ["budowy", "500-150", "koszty realizacji"],
+        primaryModule: "LEDGER",
+        relatedModules: ["LEDGER", "ACCOUNT_PLAN", "DOCUMENTS"],
+        controls: [
+          "Koszty z dekretów, gdzie budowa jest przypięta do konta 500-150.",
+          "Dokumenty i opisy kosztów przypisane do wskazanych budów.",
+          "Szybkie zawężenie raportu do jednej lub wielu budów oraz eksport wyników.",
+        ],
+        layout: ["Budowa", "Konto budowy", "Data", "Dokument", "Typ dokumentu", "Kontrahent", "Kwota", "Opis kosztu", "Status księgowy"],
+        alerts: ["Koszt bez opisu na budowie.", "Nietypowy dokument na budowie.", "Wysoki koszt wymagający weryfikacji."],
+      },
+      {
         key: "project-costs",
         title: "Koszty według projektów i zadań",
         section: "Projekty / MPK / B+R",
@@ -2413,6 +2434,24 @@ function reportFilterControl(filter, state) {
       </label>`;
   }
 
+  if (type === "multiselect") {
+    const selectedValues = new Set(value.values || []);
+    const options = selectOptionsForFilter(filter, state.reportRawRows || state.reportRows || [], state.reportHeaders || []);
+    return `
+      <fieldset class="report-filter-field report-filter-field-multiselect" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="multiselect">
+        <legend>${escapeHtml(filter)}</legend>
+        <div class="report-filter-checkboxes">
+          ${options.length
+            ? options.map((option) => `
+              <label class="report-filter-checkbox">
+                <input type="checkbox" value="${escapeHtml(option)}"${selectedValues.has(option) ? " checked" : ""}>
+                <span>${escapeHtml(option)}</span>
+              </label>`).join("")
+            : '<span class="muted">Brak wartości do wyboru.</span>'}
+        </div>
+      </fieldset>`;
+  }
+
   return `
     <label class="report-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="text">
       ${escapeHtml(filter)}
@@ -2455,6 +2494,14 @@ function rememberReportFilterValues(state) {
       };
       return;
     }
+    if (type === "multiselect") {
+      values[key] = {
+        type,
+        label: field.dataset.filterLabel || "",
+        values: [...field.querySelectorAll("input[type='checkbox']:checked")].map((input) => input.value.trim()).filter(Boolean),
+      };
+      return;
+    }
     const input = field.querySelector("input, select");
     values[key] = {
       type,
@@ -2486,6 +2533,13 @@ function rowMatchesReportFilter(row, headers, filter) {
     });
   }
 
+  if (filter.type === "multiselect") {
+    const selectedValues = (filter.values || []).map((value) => normalizeText(value)).filter(Boolean);
+    if (!selectedValues.length) return true;
+    const matchingHeaders = headersForFilter(filter.label, headers);
+    return matchingHeaders.some((header) => selectedValues.includes(normalizeText(row[header] ?? "")));
+  }
+
   const needle = String(filter.value || "").toLowerCase();
   if (!needle) return true;
   const matchingHeaders = headersForFilter(filter.label, headers);
@@ -2495,6 +2549,7 @@ function rowMatchesReportFilter(row, headers, filter) {
 function filterValueIsActive(filter) {
   if (!filter) return false;
   if (filter.type === "amount-range") return filter.min !== "" || filter.max !== "";
+  if (filter.type === "multiselect") return Boolean(filter.values?.length);
   return Boolean(filter.value);
 }
 
@@ -2510,6 +2565,7 @@ function filterControlType(filter) {
   const normalized = normalizeText(filter);
   if (normalized.includes("okres") || normalized.includes("data") || normalized.includes("typ daty")) return "date-link";
   if (normalized.includes("kwota") || normalized.includes("suma") || normalized.includes("wartosc")) return "amount-range";
+  if (normalized.includes("budowa")) return "multiselect";
   if (normalized.includes("status") || normalized.includes("typ dokumentu") || normalized.includes("waluta") || normalized.includes("priorytet")) return "select";
   return "text";
 }
@@ -2529,6 +2585,7 @@ function selectOptionsForFilter(filter, rows, headers) {
 function headersForFilter(filter, headers) {
   const normalizedFilter = normalizeText(filter);
   const aliases = [
+    ["budowa", ["budowa", "konto budowy", "realizacja", "miejsce realizacji"]],
     ["kontrahent", ["kontrahent", "dostawca", "odbiorca", "podmiot", "klient"]],
     ["status platnosci", ["status platnosci", "status", "rozliczono"]],
     ["status ksiegowy", ["status ksiegowy", "status", "bufor"]],

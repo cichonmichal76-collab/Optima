@@ -18,6 +18,20 @@ def test_manual_entries_report_finds_entries_without_scheme():
     assert query.notes
 
 
+def test_construction_site_costs_report_targets_account_500_150():
+    query = build_report_query("construction-site-costs", "202603")
+
+    assert "500-150%" in query.sql
+    assert "CDN.Konta AS wn" in query.sql
+    assert "CDN.Konta AS ma" in query.sql
+    assert "[Budowa]" in query.sql
+    assert "[Konto budowy]" in query.sql
+    assert "[Optima DeNID]" in query.sql
+    assert "n.DeN_DataDok >= '2026-03-01'" in query.sql
+    assert "n.DeN_DataDok < '2026-04-01'" in query.sql
+    assert query.notes
+
+
 def test_report_data_falls_back_to_primary_module(monkeypatch):
     def fake_run_sqlcmd_table(sql, config):
         assert "CDN.Kontrahenci" in sql

@@ -853,6 +853,40 @@ input[type="date"] {
   align-self: center;
 }
 
+.report-filter-field-multiselect {
+  gap: 10px;
+}
+
+.report-filter-field-multiselect legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-filter-checkboxes {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.report-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-filter-checkbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
 .report-filter-link {
   display: grid;
   gap: 5px;
