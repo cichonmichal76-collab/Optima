@@ -24,6 +24,8 @@ def build_report_query(
         return _build_package_status_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "closing-blockers":
         return _build_closing_blockers_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    if report_key == "documents-action":
+        return _build_documents_action_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "documents-without-scheme":
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
@@ -507,6 +509,303 @@ ORDER BY [Typ blokady], [Dokument];
             "Raport blokad zamkniecia miesiaca jest budowany jawnie z dokumentow obiegu, sprzedaży VAT i zapisow bankowych.",
             "Schemat i dekret sa kontrolowane na relacji dokument -> VAT -> IdentKsieg -> DekretyNag.",
             "Rachunek spoza bialej listy jest oznaczany konserwatywnie, gdy zapis bankowy nie pasuje do rachunkow kontrahenta ani do historii KntWeryfRachHist.",
+        ),
+    )
+
+
+def _build_documents_action_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    document_where = _period_where("d.DoN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    vat_where = _period_where("v.VaN_DataWys", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    bank_where = _period_where("b.BZp_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+WITH VatPozycje AS (
+    SELECT
+        VaT_VaNID,
+        SUM(VaT_NettoDoVAT) AS NettoDoVAT,
+        SUM(VaT_VATDoVAT) AS VATDoVAT
+    FROM CDN.VatTab
+    GROUP BY VaT_VaNID
+),
+DocumentBase AS (
+    SELECT
+        d.DoN_DoNID,
+        d.DoN_DataDok,
+        d.DoN_NumerPelny,
+        d.DoN_Status,
+        d.DoN_Typ,
+        d.DoN_Tytul,
+        d.DoN_Dotyczy
+    FROM CDN.DokNag AS d
+    {document_where}
+),
+DocumentIssues AS (
+    SELECT
+        d.DoN_DoNID,
+        d.DoN_DataDok,
+        d.DoN_NumerPelny,
+        d.DoN_Status,
+        d.DoN_Typ,
+        d.DoN_Tytul,
+        d.DoN_Dotyczy,
+        contractor.Kontrahent,
+        CASE WHEN contractor.PodmiotID IS NULL THEN 1 ELSE 0 END AS BrakKontrahenta,
+        CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ''))), '') IS NULL THEN 1 ELSE 0 END AS BrakKategorii,
+        CASE WHEN COALESCE(vat.HasControllingSegment, 0) = 0 THEN 1 ELSE 0 END AS BrakMpk,
+        CASE
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(d.DoN_Tytul, ''))), '') IS NULL
+             AND NULLIF(LTRIM(RTRIM(COALESCE(d.DoN_Dotyczy, ''))), '') IS NULL
+            THEN 1
+            ELSE 0
+        END AS BrakOpisuMerytorycznego,
+        NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '') AS IdentKsieg,
+        CAST(COALESCE(vat.KwotaBrutto, 0) AS decimal(18, 2)) AS KwotaBrutto,
+        CASE
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '') IS NULL THEN 1
+            WHEN EXISTS (
+                SELECT 1
+                FROM CDN.DekretyNag AS n
+                WHERE NULLIF(LTRIM(RTRIM(COALESCE(n.DeN_IdentKsieg, ''))), '') = NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '')
+            ) THEN 0
+            ELSE 1
+        END AS BrakDekretu
+    FROM DocumentBase AS d
+    OUTER APPLY (
+        SELECT TOP (1)
+            dp.DoP_PodmiotID AS PodmiotID,
+            NULLIF(LTRIM(RTRIM(CONCAT(pv.Pod_Nazwa1, ' ', pv.Pod_Nazwa2))), '') AS Kontrahent
+        FROM CDN.DokPodmioty AS dp
+        LEFT JOIN CDN.PodmiotyView AS pv
+            ON pv.Pod_PodmiotTyp = dp.DoP_PodmiotTyp
+           AND pv.Pod_PodId = dp.DoP_PodmiotID
+        WHERE dp.DoP_DoNID = d.DoN_DoNID
+        ORDER BY dp.DoP_DoPId DESC
+    ) AS contractor
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID AS TrNID,
+            tr.TrN_Kategoria AS Kategoria
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = d.DoN_DoNID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tra
+    OUTER APPLY (
+        SELECT TOP (1)
+            va.VaN_VaNID AS VaNID,
+            va.VaN_Kategoria AS Kategoria,
+            va.VaN_IdentKsieg AS IdentKsieg,
+            CAST(COALESCE(p.NettoDoVAT + p.VATDoVAT, va.VaN_RazemBrutto, 0) AS decimal(18, 2)) AS KwotaBrutto,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM CDN.VatTab AS vt
+                WHERE vt.VaT_VaNID = va.VaN_VaNID
+                  AND (
+                    NULLIF(LTRIM(RTRIM(vt.VaT_Segment1)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment2)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment3)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment4)), '') IS NOT NULL
+                  )
+            ) THEN 1 ELSE 0 END AS HasControllingSegment
+        FROM CDN.VatNag AS va
+        LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = va.VaN_VaNID
+        WHERE va.VaN_DnpID = d.DoN_DoNID
+        ORDER BY va.VaN_VaNID DESC
+    ) AS vat
+),
+SalesWithoutKsef AS (
+    SELECT
+        v.VaN_VaNID,
+        v.VaN_Dokument,
+        NULLIF(LTRIM(RTRIM(CONCAT(v.VaN_KntNazwa1, ' ', v.VaN_KntNazwa2, ' ', v.VaN_KntNazwa3))), '') AS Kontrahent,
+        CAST(COALESCE(p.NettoDoVAT + p.VATDoVAT, v.VaN_RazemBrutto, 0) AS decimal(18, 2)) AS Kwota
+    FROM CDN.VatNag AS v
+    LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = v.VaN_VaNID
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID,
+            tr.TrN_NrKSeF
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = v.VaN_DnpID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tr
+    OUTER APPLY (
+        SELECT TOP (1)
+            dk.DKF_NumerKSeF
+        FROM CDN.DokumentyKSeF AS dk
+        WHERE dk.DKF_VaNId = v.VaN_VaNID
+           OR (tr.TrN_TrNID IS NOT NULL AND dk.DKF_TrNId = tr.TrN_TrNID)
+        ORDER BY dk.DKF_DKFID DESC
+    ) AS ksef
+    WHERE v.VaN_Rejestr = N'SPRZEDAŻ'
+      AND NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_NrKSeF, tr.TrN_NrKSeF, ksef.DKF_NumerKSeF, ''))), '') IS NULL
+      {vat_where.replace("WHERE ", "AND ", 1)}
+),
+UnmatchedBank AS (
+    SELECT
+        b.BZp_BZpID,
+        COALESCE(NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_NumerPelny, ''))), ''), NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_NumerObcy, ''))), ''), CAST(b.BZp_BZpID AS varchar(20))) AS Dokument,
+        NULLIF(LTRIM(RTRIM(CONCAT(b.BZp_Nazwa1, ' ', b.BZp_Nazwa2, ' ', b.BZp_Nazwa3))), '') AS Kontrahent,
+        CAST(ABS(COALESCE(b.BZp_Kwota, 0)) AS decimal(18, 2)) AS Kwota,
+        CASE WHEN b.BZp_Rozliczono = 0 THEN 1 ELSE 0 END AS Nierozliczona,
+        CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_KontoPrzeciwstawne, ''))), '') IS NULL THEN 1 ELSE 0 END AS BrakKontaPrzeciwstawnego,
+        CASE WHEN NULLIF(LTRIM(RTRIM(CONCAT(b.BZp_Nazwa1, ' ', b.BZp_Nazwa2, ' ', b.BZp_Nazwa3))), '') IS NULL THEN 1 ELSE 0 END AS BrakKontrahenta
+    FROM CDN.BnkZapisy AS b
+    WHERE ABS(COALESCE(b.BZp_Kwota, 0)) > 0
+      AND b.BZp_Rozliczono = 0
+      {bank_where.replace("WHERE ", "AND ", 1)}
+),
+ActionRows AS (
+    SELECT
+        N'Krytyczny' AS [Priorytet],
+        issues.DoN_NumerPelny AS [Dokument],
+        N'Obieg dokumentów' AS [Typ],
+        issues.Kontrahent AS [Kontrahent],
+        issues.KwotaBrutto AS [Kwota],
+        N'Brak schematu i dekretu.' AS [Problem],
+        N'Księgowość' AS [Odpowiedzialny],
+        N'Do obsługi' AS [Status],
+        '1' AS [__flag_priorytet_krytyczny],
+        '0' AS [__flag_priorytet_wysoki],
+        '0' AS [__flag_priorytet_sredni],
+        '1' AS [__flag_brak_schematu_i_dekretu],
+        '0' AS [__flag_brak_ksef],
+        '0' AS [__flag_platnosc_nierozpoznana],
+        CASE WHEN issues.BrakMpk = 1 THEN '1' ELSE '0' END AS [__flag_brak_mpk],
+        CASE WHEN issues.BrakOpisuMerytorycznego = 1 THEN '1' ELSE '0' END AS [__flag_brak_opisu_merytorycznego],
+        '1' AS [__flag_do_obslugi_ksiegowej],
+        '0' AS [__flag_do_rozliczenia_platnosci],
+        '0' AS [__flag_do_uzupelnienia_danych]
+    FROM DocumentIssues AS issues
+    WHERE issues.BrakDekretu = 1
+      AND (
+            issues.BrakKontrahenta = 1
+            OR issues.BrakKategorii = 1
+            OR issues.BrakMpk = 1
+      )
+
+    UNION ALL
+
+    SELECT
+        N'Krytyczny' AS [Priorytet],
+        sales.VaN_Dokument AS [Dokument],
+        N'Faktura sprzedaży' AS [Typ],
+        sales.Kontrahent AS [Kontrahent],
+        sales.Kwota AS [Kwota],
+        N'Brak KSeF.' AS [Problem],
+        N'Sprzedaż / księgowość' AS [Odpowiedzialny],
+        N'Do poprawy' AS [Status],
+        '1' AS [__flag_priorytet_krytyczny],
+        '0' AS [__flag_priorytet_wysoki],
+        '0' AS [__flag_priorytet_sredni],
+        '0' AS [__flag_brak_schematu_i_dekretu],
+        '1' AS [__flag_brak_ksef],
+        '0' AS [__flag_platnosc_nierozpoznana],
+        '0' AS [__flag_brak_mpk],
+        '0' AS [__flag_brak_opisu_merytorycznego],
+        '0' AS [__flag_do_obslugi_ksiegowej],
+        '0' AS [__flag_do_rozliczenia_platnosci],
+        '0' AS [__flag_do_uzupelnienia_danych]
+    FROM SalesWithoutKsef AS sales
+
+    UNION ALL
+
+    SELECT
+        N'Wysoki' AS [Priorytet],
+        bank.Dokument AS [Dokument],
+        N'Bank' AS [Typ],
+        bank.Kontrahent AS [Kontrahent],
+        bank.Kwota AS [Kwota],
+        N'Płatność nierozpoznana.' AS [Problem],
+        N'Księgowość / płatności' AS [Odpowiedzialny],
+        N'Do rozliczenia' AS [Status],
+        '0' AS [__flag_priorytet_krytyczny],
+        '1' AS [__flag_priorytet_wysoki],
+        '0' AS [__flag_priorytet_sredni],
+        '0' AS [__flag_brak_schematu_i_dekretu],
+        '0' AS [__flag_brak_ksef],
+        '1' AS [__flag_platnosc_nierozpoznana],
+        '0' AS [__flag_brak_mpk],
+        '0' AS [__flag_brak_opisu_merytorycznego],
+        '0' AS [__flag_do_obslugi_ksiegowej],
+        '1' AS [__flag_do_rozliczenia_platnosci],
+        '0' AS [__flag_do_uzupelnienia_danych]
+    FROM UnmatchedBank AS bank
+    WHERE bank.Nierozliczona = 1
+      AND (bank.BrakKontaPrzeciwstawnego = 1 OR bank.BrakKontrahenta = 1)
+
+    UNION ALL
+
+    SELECT
+        N'Średni' AS [Priorytet],
+        issues.DoN_NumerPelny AS [Dokument],
+        N'Obieg dokumentów' AS [Typ],
+        issues.Kontrahent AS [Kontrahent],
+        issues.KwotaBrutto AS [Kwota],
+        N'Brak MPK.' AS [Problem],
+        N'Dział merytoryczny' AS [Odpowiedzialny],
+        N'Do uzupełnienia' AS [Status],
+        '0' AS [__flag_priorytet_krytyczny],
+        '0' AS [__flag_priorytet_wysoki],
+        '1' AS [__flag_priorytet_sredni],
+        '0' AS [__flag_brak_schematu_i_dekretu],
+        '0' AS [__flag_brak_ksef],
+        '0' AS [__flag_platnosc_nierozpoznana],
+        '1' AS [__flag_brak_mpk],
+        '0' AS [__flag_brak_opisu_merytorycznego],
+        '0' AS [__flag_do_obslugi_ksiegowej],
+        '0' AS [__flag_do_rozliczenia_platnosci],
+        '1' AS [__flag_do_uzupelnienia_danych]
+    FROM DocumentIssues AS issues
+    WHERE issues.BrakMpk = 1
+
+    UNION ALL
+
+    SELECT
+        N'Średni' AS [Priorytet],
+        issues.DoN_NumerPelny AS [Dokument],
+        N'Obieg dokumentów' AS [Typ],
+        issues.Kontrahent AS [Kontrahent],
+        issues.KwotaBrutto AS [Kwota],
+        N'Brak opisu merytorycznego.' AS [Problem],
+        N'Dział merytoryczny' AS [Odpowiedzialny],
+        N'Do uzupełnienia' AS [Status],
+        '0' AS [__flag_priorytet_krytyczny],
+        '0' AS [__flag_priorytet_wysoki],
+        '1' AS [__flag_priorytet_sredni],
+        '0' AS [__flag_brak_schematu_i_dekretu],
+        '0' AS [__flag_brak_ksef],
+        '0' AS [__flag_platnosc_nierozpoznana],
+        '0' AS [__flag_brak_mpk],
+        '1' AS [__flag_brak_opisu_merytorycznego],
+        '0' AS [__flag_do_obslugi_ksiegowej],
+        '0' AS [__flag_do_rozliczenia_platnosci],
+        '1' AS [__flag_do_uzupelnienia_danych]
+    FROM DocumentIssues AS issues
+    WHERE issues.BrakOpisuMerytorycznego = 1
+)
+SELECT *
+FROM ActionRows
+ORDER BY
+    CASE [Priorytet]
+        WHEN N'Krytyczny' THEN 1
+        WHEN N'Wysoki' THEN 2
+        ELSE 3
+    END,
+    [Dokument];
+""".strip()
+    return OptimaReportQuery(
+        report_key="documents-action",
+        sql=sql,
+        notes=(
+            "Raport dziennej kolejki pracy ksiegowej jest budowany jawnie z dokumentow obiegu, VAT sprzedazy i zapisow bankowych.",
+            "Priorytet krytyczny obejmuje brak schematu z brakiem dekretu oraz faktury sprzedazy bez numeru KSeF.",
+            "Wysoki priorytet pokazuje nierozliczone platnosci bankowe bez jednoznacznego rozpoznania, a sredni braki MPK i opisu merytorycznego.",
         ),
     )
 

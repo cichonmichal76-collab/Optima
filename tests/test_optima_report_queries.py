@@ -41,6 +41,29 @@ def test_closing_blockers_report_exposes_explicit_blocker_flags():
     assert query.notes
 
 
+def test_documents_action_report_exposes_explicit_action_flags():
+    query = build_report_query("documents-action", "202603")
+
+    assert "DocumentIssues" in query.sql
+    assert "SalesWithoutKsef" in query.sql
+    assert "UnmatchedBank" in query.sql
+    assert "DoN_Tytul" in query.sql
+    assert "BZp_Rozliczono = 0" in query.sql
+    assert "[__flag_priorytet_krytyczny]" in query.sql
+    assert "[__flag_brak_schematu_i_dekretu]" in query.sql
+    assert "[__flag_brak_ksef]" in query.sql
+    assert "[__flag_platnosc_nierozpoznana]" in query.sql
+    assert "[__flag_brak_mpk]" in query.sql
+    assert "[__flag_brak_opisu_merytorycznego]" in query.sql
+    assert "[__flag_do_obslugi_ksiegowej]" in query.sql
+    assert "[__flag_do_rozliczenia_platnosci]" in query.sql
+    assert "[__flag_do_uzupelnienia_danych]" in query.sql
+    assert "d.DoN_DataDok >= '2026-03-01'" in query.sql
+    assert "v.VaN_DataWys >= '2026-03-01'" in query.sql
+    assert "b.BZp_DataDok >= '2026-03-01'" in query.sql
+    assert query.notes
+
+
 def test_manual_entries_report_finds_entries_without_scheme():
     query = build_report_query("manual-entries", "202603")
 
@@ -177,6 +200,30 @@ def test_report_data_uses_explicit_closing_blockers_query(monkeypatch):
     assert payload["rows"] == [{"Typ blokady": "Podatkowa / KSeF", "Dokument": "FS/1/03/2026"}]
     assert payload["source"]["source_type"] == "report"
     assert payload["source"]["report"] == "closing-blockers"
+
+
+def test_report_data_uses_explicit_documents_action_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "ActionRows" in sql
+        assert "[Priorytet]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Priorytet", "Dokument"], [{"Priorytet": "Krytyczny", "Dokument": "FS/1/03/2026"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "documents-action",
+            "report_title": "Dokumenty wymagające działania",
+            "module": "DOCUMENTS",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Priorytet": "Krytyczny", "Dokument": "FS/1/03/2026"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "documents-action"
 
 
 def test_report_data_defaults_to_selected_import_year(monkeypatch):
