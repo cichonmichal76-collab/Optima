@@ -31,7 +31,7 @@ def build_report_query(
     if report_key == "documents-without-scheme":
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
-        return _build_manual_entries_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+        return _build_manual_entries_flagged_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "construction-site-costs":
         return _build_construction_site_costs_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego zapytania SQL dla raportu: {report_key}")
@@ -1061,6 +1061,105 @@ ORDER BY d.DoN_DataDok DESC, d.DoN_DoNID DESC;
             "Raport dokumentów z obiegu bez kompletnego zestawu danych potrzebnych do automatycznego przypisania schematu.",
             "Flagi filtrów są budowane jawnie z CDN.DokNag, CDN.DokPodmioty, CDN.TraNag, CDN.VatNag, CDN.VatTab, CDN.DokumentyKSeF i CDN.Trwale.",
             "Brak MPK i brak projektu korzystają z dostępności segmentów controllingowych w CDN.VatTab.",
+        ),
+    )
+
+
+def _build_manual_entries_flagged_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    where = _period_where("n.DeN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    time_condition = where.replace("WHERE ", "AND ", 1) if where else ""
+    sql = f"""
+SET NOCOUNT ON;
+WITH ManualEntries AS (
+    SELECT
+        CONVERT(varchar(10), n.DeN_DataDok, 23) AS DataDok,
+        COALESCE(NULLIF(n.DeN_Dziennik, ''), CAST(n.DeN_Typ AS varchar(20))) AS TypDok,
+        COALESCE(NULLIF(n.DeN_Dokument, ''), n.DeN_NumerPelny, CAST(n.DeN_DeNId AS varchar(20))) AS NumerDok,
+        NULLIF(LTRIM(RTRIM(CONCAT(p.Pod_Nazwa1, ' ', p.Pod_Nazwa2))), '') AS Kontrahent,
+        CAST(
+            CASE
+                WHEN ABS(COALESCE(n.DeN_KwotaWn, 0)) >= ABS(COALESCE(n.DeN_KwotaMa, 0))
+                    THEN COALESCE(n.DeN_KwotaWn, 0)
+                ELSE COALESCE(n.DeN_KwotaMa, 0)
+            END AS decimal(18, 2)
+        ) AS Brutto,
+        wn.KontaWn,
+        ma.KontaMa,
+        NULLIF(LTRIM(RTRIM(CONCAT(n.DeN_OpeZalKod, ' ', n.DeN_OpeZalNazwisko))), '') AS OsobaKs,
+        COALESCE(NULLIF(n.DeN_Kategoria, ''), NULLIF(n.DeN_RodzajDowoduKsiegowego, ''), N'Jest dekret, brak schematu/wzorca') AS Uwagi,
+        n.DeN_DeNId AS OptimaDeNID,
+        COUNT(*) OVER() AS AllManualCount,
+        COUNT(*) OVER(PARTITION BY COALESCE(NULLIF(n.DeN_Dziennik, ''), CAST(n.DeN_Typ AS varchar(20)))) AS TypManualCount
+    FROM CDN.DekretyNag AS n
+    LEFT JOIN CDN.PodmiotyView AS p
+        ON p.Pod_PodmiotTyp = n.DeN_PodmiotTyp
+       AND p.Pod_PodId = n.DeN_PodmiotId
+    OUTER APPLY (
+        SELECT STRING_AGG(CONVERT(nvarchar(max), x.KontoWn), N', ') AS KontaWn
+        FROM (
+            SELECT DISTINCT NULLIF(e.DeE_KontoWn, '') AS KontoWn
+            FROM CDN.DekretyElem AS e
+            WHERE e.DeE_DeNId = n.DeN_DeNId
+              AND NULLIF(e.DeE_KontoWn, '') IS NOT NULL
+        ) AS x
+    ) AS wn
+    OUTER APPLY (
+        SELECT STRING_AGG(CONVERT(nvarchar(max), x.KontoMa), N', ') AS KontaMa
+        FROM (
+            SELECT DISTINCT NULLIF(e.DeE_KontoMa, '') AS KontoMa
+            FROM CDN.DekretyElem AS e
+            WHERE e.DeE_DeNId = n.DeN_DeNId
+              AND NULLIF(e.DeE_KontoMa, '') IS NOT NULL
+        ) AS x
+    ) AS ma
+    WHERE
+        (n.DeN_WzorzecId IS NULL OR n.DeN_WzorzecId = 0 OR n.DeN_WzorzecTyp IS NULL OR n.DeN_WzorzecTyp = 0)
+        AND EXISTS (
+            SELECT 1
+            FROM CDN.DekretyElem AS e
+            WHERE e.DeE_DeNId = n.DeN_DeNId
+              AND (NULLIF(e.DeE_KontoWn, '') IS NOT NULL OR NULLIF(e.DeE_KontoMa, '') IS NOT NULL)
+        )
+        {time_condition}
+)
+SELECT
+    DataDok AS [Data],
+    TypDok AS [Typ],
+    NumerDok AS [Numer],
+    Kontrahent AS [Kontrahent],
+    Brutto AS [Brutto],
+    KontaWn AS [Konto Wn],
+    KontaMa AS [Konto Ma],
+    OsobaKs AS [Osoba księgująca],
+    Uwagi AS [Uwagi],
+    CASE
+        WHEN TypManualCount >= 3 THEN N'Powtarzalny typ ręcznie księgowany.'
+        WHEN Brutto >= 10000 THEN N'Ręczne księgowanie na istotną kwotę.'
+        ELSE N'Księgowanie ręczne: dekret istnieje, ale brak schematu'
+    END AS [Wniosek],
+    OptimaDeNID AS [Optima DeNID],
+    CASE WHEN Brutto >= 10000 THEN '1' ELSE '0' END AS [__flag_dekrety_reczne_na_istotne_kwoty],
+    CASE WHEN TypManualCount >= 3 THEN '1' ELSE '0' END AS [__flag_powtarzalne_dokumenty_ksiegowane_recznie],
+    CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(OsobaKs, ''))), '') IS NOT NULL OR NULLIF(LTRIM(RTRIM(COALESCE(Uwagi, ''))), '') IS NOT NULL THEN '1' ELSE '0' END AS [__flag_osoba_ksiegujaca_i_uwagi_do_dekretu],
+    CASE WHEN AllManualCount >= 10 OR TypManualCount >= 5 THEN '1' ELSE '0' END AS [__flag_duzo_recznych_dekretow],
+    CASE WHEN Brutto >= 10000 THEN '1' ELSE '0' END AS [__flag_reczne_ksiegowanie_na_istotna_kwote],
+    CASE WHEN TypManualCount >= 3 THEN '1' ELSE '0' END AS [__flag_powtarzalny_typ_dokumentu_bez_schematu]
+FROM ManualEntries
+ORDER BY DataDok DESC, OptimaDeNID DESC;
+""".strip()
+    return OptimaReportQuery(
+        report_key="manual-entries",
+        sql=sql,
+        notes=(
+            "Raport 4.4: dokumenty z dekretem, ale bez schematu.",
+            "Warunek: istnieje pozycja dekretu z kontem Wn/Ma oraz brak DeN_WzorzecId lub DeN_WzorzecTyp.",
+            "Flagi raportu sa liczone jawnie dla istotnej kwoty, powtarzalnosci typu dokumentu oraz skali recznych dekretow w badanym okresie.",
         ),
     )
 

@@ -306,3 +306,41 @@ def test_report_data_rejects_year_outside_allowed_scope():
         assert "2025 i 2026" in str(exc)
     else:
         raise AssertionError("Expected ValueError for out-of-range year")
+
+
+def test_manual_entries_report_exposes_explicit_manual_flags():
+    query = build_report_query("manual-entries", "202603")
+
+    assert "ManualEntries AS (" in query.sql
+    assert "COUNT(*) OVER() AS AllManualCount" in query.sql
+    assert "COUNT(*) OVER(PARTITION BY" in query.sql
+    assert "[__flag_dekrety_reczne_na_istotne_kwoty]" in query.sql
+    assert "[__flag_powtarzalne_dokumenty_ksiegowane_recznie]" in query.sql
+    assert "[__flag_osoba_ksiegujaca_i_uwagi_do_dekretu]" in query.sql
+    assert "[__flag_duzo_recznych_dekretow]" in query.sql
+    assert "[__flag_reczne_ksiegowanie_na_istotna_kwote]" in query.sql
+    assert "[__flag_powtarzalny_typ_dokumentu_bez_schematu]" in query.sql
+
+
+def test_report_data_uses_explicit_manual_entries_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "ManualEntries AS (" in sql
+        assert "[__flag_dekrety_reczne_na_istotne_kwoty]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Numer", "__flag_dekrety_reczne_na_istotne_kwoty"], [{"Numer": "E/2026/03", "__flag_dekrety_reczne_na_istotne_kwoty": "1"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "manual-entries",
+            "report_title": "Dokumenty z dekretem, ale bez schematu",
+            "module": "LEDGER",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Numer": "E/2026/03", "__flag_dekrety_reczne_na_istotne_kwoty": "1"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "manual-entries"
