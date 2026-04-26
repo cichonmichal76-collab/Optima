@@ -22,6 +22,8 @@ def build_report_query(
 ) -> OptimaReportQuery:
     if report_key == "package-status":
         return _build_package_status_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    if report_key == "closing-blockers":
+        return _build_closing_blockers_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "documents-without-scheme":
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
@@ -217,6 +219,294 @@ FROM PackageMetrics AS metrics;
             "Status paczki jest liczony jawnie z dokumentow obiegu i rejestrow VAT ograniczonych do aktywnego okresu.",
             "Brak schematu wynika z brakow kontrahenta, kategorii, stawki VAT lub controllingowych segmentow VAT.",
             "Brak dekretu jest sprawdzany po VaN_IdentKsieg kontra CDN.DekretyNag.DeN_IdentKsieg.",
+        ),
+    )
+
+
+def _build_closing_blockers_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    document_where = _period_where("d.DoN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    vat_where = _period_where("v.VaN_DataWys", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    bank_where = _period_where("b.BZp_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+WITH VatPozycje AS (
+    SELECT
+        VaT_VaNID,
+        SUM(VaT_NettoDoVAT) AS NettoDoVAT,
+        SUM(VaT_VATDoVAT) AS VATDoVAT
+    FROM CDN.VatTab
+    GROUP BY VaT_VaNID
+),
+DocumentBase AS (
+    SELECT
+        d.DoN_DoNID,
+        d.DoN_DataDok,
+        d.DoN_NumerPelny,
+        d.DoN_Status,
+        d.DoN_Typ
+    FROM CDN.DokNag AS d
+    {document_where}
+),
+DocumentIssues AS (
+    SELECT
+        d.DoN_DoNID,
+        d.DoN_DataDok,
+        d.DoN_NumerPelny,
+        d.DoN_Status,
+        contractor.Kontrahent,
+        CASE WHEN contractor.PodmiotID IS NULL THEN 1 ELSE 0 END AS BrakKontrahenta,
+        CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(tra.Kategoria, vat.Kategoria, ''))), '') IS NULL THEN 1 ELSE 0 END AS BrakKategorii,
+        CASE
+            WHEN vat.VaNID IS NULL AND tra.TrNID IS NULL THEN 1
+            WHEN COALESCE(vat.VatRateAvailable, 0) = 0 THEN 1
+            ELSE 0
+        END AS BrakStawkiVat,
+        CASE WHEN COALESCE(vat.HasControllingSegment, 0) = 0 THEN 1 ELSE 0 END AS BrakMpk,
+        NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '') AS IdentKsieg,
+        CASE
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '') IS NULL THEN 1
+            WHEN EXISTS (
+                SELECT 1
+                FROM CDN.DekretyNag AS n
+                WHERE NULLIF(LTRIM(RTRIM(COALESCE(n.DeN_IdentKsieg, ''))), '') = NULLIF(LTRIM(RTRIM(COALESCE(vat.IdentKsieg, ''))), '')
+            ) THEN 0
+            ELSE 1
+        END AS BrakDekretu
+    FROM DocumentBase AS d
+    OUTER APPLY (
+        SELECT TOP (1)
+            dp.DoP_PodmiotID AS PodmiotID,
+            NULLIF(LTRIM(RTRIM(CONCAT(pv.Pod_Nazwa1, ' ', pv.Pod_Nazwa2))), '') AS Kontrahent
+        FROM CDN.DokPodmioty AS dp
+        LEFT JOIN CDN.PodmiotyView AS pv
+            ON pv.Pod_PodmiotTyp = dp.DoP_PodmiotTyp
+           AND pv.Pod_PodId = dp.DoP_PodmiotID
+        WHERE dp.DoP_DoNID = d.DoN_DoNID
+        ORDER BY dp.DoP_DoPId DESC
+    ) AS contractor
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID AS TrNID,
+            tr.TrN_Kategoria AS Kategoria
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = d.DoN_DoNID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tra
+    OUTER APPLY (
+        SELECT TOP (1)
+            va.VaN_VaNID AS VaNID,
+            va.VaN_Kategoria AS Kategoria,
+            va.VaN_IdentKsieg AS IdentKsieg,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM CDN.VatTab AS vt
+                WHERE vt.VaT_VaNID = va.VaN_VaNID
+                  AND vt.VaT_Stawka IS NOT NULL
+            ) THEN 1 ELSE 0 END AS VatRateAvailable,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM CDN.VatTab AS vt
+                WHERE vt.VaT_VaNID = va.VaN_VaNID
+                  AND (
+                    NULLIF(LTRIM(RTRIM(vt.VaT_Segment1)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment2)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment3)), '') IS NOT NULL
+                    OR NULLIF(LTRIM(RTRIM(vt.VaT_Segment4)), '') IS NOT NULL
+                  )
+            ) THEN 1 ELSE 0 END AS HasControllingSegment
+        FROM CDN.VatNag AS va
+        WHERE va.VaN_DnpID = d.DoN_DoNID
+        ORDER BY va.VaN_VaNID DESC
+    ) AS vat
+),
+DuplicateDocuments AS (
+    SELECT
+        d.DoN_NumerPelny,
+        CONVERT(varchar(10), MIN(d.DoN_DataDok), 23) AS DataDokumentu,
+        COUNT(*) AS LiczbaDuplikatow
+    FROM DocumentBase AS d
+    WHERE NULLIF(LTRIM(RTRIM(d.DoN_NumerPelny)), '') IS NOT NULL
+    GROUP BY d.DoN_NumerPelny, CONVERT(date, d.DoN_DataDok)
+    HAVING COUNT(*) > 1
+),
+SalesWithoutKsef AS (
+    SELECT
+        v.VaN_VaNID,
+        v.VaN_Dokument,
+        CONVERT(varchar(10), v.VaN_DataWys, 23) AS DataDokumentu,
+        NULLIF(LTRIM(RTRIM(CONCAT(v.VaN_KntNazwa1, ' ', v.VaN_KntNazwa2, ' ', v.VaN_KntNazwa3))), '') AS Kontrahent,
+        CAST(COALESCE(p.NettoDoVAT + p.VATDoVAT, v.VaN_RazemBrutto, 0) AS decimal(18, 2)) AS Kwota,
+        COALESCE(NULLIF(LTRIM(RTRIM(v.VaN_NrKSeF)), ''), NULLIF(LTRIM(RTRIM(tr.TrN_NrKSeF)), ''), NULLIF(LTRIM(RTRIM(ksef.DKF_NumerKSeF)), '')) AS NumerKSeF
+    FROM CDN.VatNag AS v
+    LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = v.VaN_VaNID
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID,
+            tr.TrN_NrKSeF
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = v.VaN_DnpID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tr
+    OUTER APPLY (
+        SELECT TOP (1)
+            dk.DKF_NumerKSeF
+        FROM CDN.DokumentyKSeF AS dk
+        WHERE dk.DKF_VaNId = v.VaN_VaNID
+           OR (tr.TrN_TrNID IS NOT NULL AND dk.DKF_TrNId = tr.TrN_TrNID)
+        ORDER BY dk.DKF_DKFID DESC
+    ) AS ksef
+    WHERE v.VaN_Rejestr = N'SPRZEDAŻ'
+      AND NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_NrKSeF, tr.TrN_NrKSeF, ksef.DKF_NumerKSeF, ''))), '') IS NULL
+      {vat_where.replace("WHERE ", "AND ", 1)}
+),
+BankWhitelistRisk AS (
+    SELECT
+        b.BZp_BZpID,
+        b.BZp_NumerPelny,
+        CONVERT(varchar(10), b.BZp_DataDok, 23) AS DataDokumentu,
+        NULLIF(LTRIM(RTRIM(CONCAT(b.BZp_Nazwa1, ' ', b.BZp_Nazwa2, ' ', b.BZp_Nazwa3))), '') AS Kontrahent,
+        CAST(ABS(COALESCE(b.BZp_Kwota, 0)) AS decimal(18, 2)) AS Kwota,
+        b.BZp_RachunekNr,
+        k.Knt_KntId
+    FROM CDN.BnkZapisy AS b
+    LEFT JOIN CDN.Kontrahenci AS k ON k.Knt_KntId = b.BZp_PodmiotID
+    WHERE ABS(COALESCE(b.BZp_Kwota, 0)) >= 15000
+      AND NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_RachunekNr, ''))), '') IS NOT NULL
+      AND (
+            k.Knt_KntId IS NULL
+            OR (
+                NULLIF(LTRIM(RTRIM(COALESCE(k.Knt_RachunekNr, ''))), '') <> NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_RachunekNr, ''))), '')
+                AND NULLIF(LTRIM(RTRIM(COALESCE(k.Knt_RachunekNr0, ''))), '') <> NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_RachunekNr, ''))), '')
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM CDN.KntWeryfRachHist AS hist
+                    WHERE hist.KWRH_KntID = k.Knt_KntId
+                      AND NULLIF(LTRIM(RTRIM(COALESCE(hist.KWRH_RachunekNr, ''))), '') = NULLIF(LTRIM(RTRIM(COALESCE(b.BZp_RachunekNr, ''))), '')
+                )
+            )
+      )
+      {bank_where.replace("WHERE ", "AND ", 1)}
+),
+NoDataBlocker AS (
+    SELECT
+        CASE
+            WHEN NOT EXISTS (SELECT 1 FROM DocumentBase)
+             AND NOT EXISTS (SELECT 1 FROM SalesWithoutKsef)
+             AND NOT EXISTS (SELECT 1 FROM BankWhitelistRisk)
+            THEN 1
+            ELSE 0
+        END AS IsActive
+)
+SELECT
+    N'Techniczna' AS [Typ blokady],
+    N'Brak danych w wybranym okresie' AS [Dokument],
+    NULL AS [Kontrahent],
+    CAST(0 AS decimal(18, 2)) AS [Kwota],
+    N'Brak danych źródłowych dla wybranego okresu.' AS [Powód],
+    N'Administrator / księgowość' AS [Odpowiedzialny],
+    N'Do sprawdzenia' AS [Status],
+    '1' AS [__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty],
+    '0' AS [__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny],
+    '0' AS [__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze],
+    '0' AS [__flag_dokument_bez_schematu_i_bez_dekretu],
+    '0' AS [__flag_faktura_sprzedazy_bez_ksef],
+    '0' AS [__flag_platnosc_na_rachunek_spoza_bialej_listy]
+FROM NoDataBlocker
+WHERE IsActive = 1
+
+UNION ALL
+
+SELECT
+    N'Techniczna' AS [Typ blokady],
+    dup.DoN_NumerPelny AS [Dokument],
+    NULL AS [Kontrahent],
+    CAST(dup.LiczbaDuplikatow AS decimal(18, 2)) AS [Kwota],
+    N'Duplikat numeru dokumentu w wybranym okresie.' AS [Powód],
+    N'Administrator / księgowość' AS [Odpowiedzialny],
+    N'Do sprawdzenia' AS [Status],
+    '1' AS [__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty],
+    '0' AS [__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny],
+    '0' AS [__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze],
+    '0' AS [__flag_dokument_bez_schematu_i_bez_dekretu],
+    '0' AS [__flag_faktura_sprzedazy_bez_ksef],
+    '0' AS [__flag_platnosc_na_rachunek_spoza_bialej_listy]
+FROM DuplicateDocuments AS dup
+
+UNION ALL
+
+SELECT
+    N'Księgowa / schematowa' AS [Typ blokady],
+    issues.DoN_NumerPelny AS [Dokument],
+    issues.Kontrahent AS [Kontrahent],
+    CAST(0 AS decimal(18, 2)) AS [Kwota],
+    N'Dokument bez schematu i bez dekretu.' AS [Powód],
+    N'Księgowość' AS [Odpowiedzialny],
+    N'Do obsługi' AS [Status],
+    '0' AS [__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty],
+    '1' AS [__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny],
+    '0' AS [__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze],
+    '1' AS [__flag_dokument_bez_schematu_i_bez_dekretu],
+    '0' AS [__flag_faktura_sprzedazy_bez_ksef],
+    '0' AS [__flag_platnosc_na_rachunek_spoza_bialej_listy]
+FROM DocumentIssues AS issues
+WHERE issues.BrakDekretu = 1
+  AND (
+        issues.BrakKontrahenta = 1
+        OR issues.BrakKategorii = 1
+        OR issues.BrakStawkiVat = 1
+        OR issues.BrakMpk = 1
+  )
+
+UNION ALL
+
+SELECT
+    N'Podatkowa / KSeF' AS [Typ blokady],
+    sales.VaN_Dokument AS [Dokument],
+    sales.Kontrahent AS [Kontrahent],
+    sales.Kwota AS [Kwota],
+    N'Faktura sprzedaży bez KSeF.' AS [Powód],
+    N'Sprzedaż / księgowość' AS [Odpowiedzialny],
+    N'Do poprawy' AS [Status],
+    '0' AS [__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty],
+    '0' AS [__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny],
+    '1' AS [__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze],
+    '0' AS [__flag_dokument_bez_schematu_i_bez_dekretu],
+    '1' AS [__flag_faktura_sprzedazy_bez_ksef],
+    '0' AS [__flag_platnosc_na_rachunek_spoza_bialej_listy]
+FROM SalesWithoutKsef AS sales
+
+UNION ALL
+
+SELECT
+    N'Płatnicza / podatkowa' AS [Typ blokady],
+    bank.BZp_NumerPelny AS [Dokument],
+    bank.Kontrahent AS [Kontrahent],
+    bank.Kwota AS [Kwota],
+    N'Płatność na rachunek spoza białej listy.' AS [Powód],
+    N'Księgowość / płatności' AS [Odpowiedzialny],
+    N'Do weryfikacji' AS [Status],
+    '0' AS [__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty],
+    '0' AS [__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny],
+    '1' AS [__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze],
+    '0' AS [__flag_dokument_bez_schematu_i_bez_dekretu],
+    '0' AS [__flag_faktura_sprzedazy_bez_ksef],
+    '1' AS [__flag_platnosc_na_rachunek_spoza_bialej_listy]
+FROM BankWhitelistRisk AS bank
+ORDER BY [Typ blokady], [Dokument];
+""".strip()
+    return OptimaReportQuery(
+        report_key="closing-blockers",
+        sql=sql,
+        notes=(
+            "Raport blokad zamkniecia miesiaca jest budowany jawnie z dokumentow obiegu, sprzedaży VAT i zapisow bankowych.",
+            "Schemat i dekret sa kontrolowane na relacji dokument -> VAT -> IdentKsieg -> DekretyNag.",
+            "Rachunek spoza bialej listy jest oznaczany konserwatywnie, gdy zapis bankowy nie pasuje do rachunkow kontrahenta ani do historii KntWeryfRachHist.",
         ),
     )
 

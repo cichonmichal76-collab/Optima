@@ -266,6 +266,7 @@ const REPORT_GROUPS = [
         summary: "Raport blokad podzielonych na techniczne, księgowe, schematowe, VAT, KSeF, rozrachunkowe, merytoryczne i zarządcze.",
         question: "Co dokładnie blokuje zamknięcie miesiąca i kto powinien usunąć blokadę?",
         priority: "Krytyczny",
+        queryKey: "closing-blockers",
         sources: ["Optima", "KSeF", "Bank", "OCR"],
         filters: ["Okres od-do", "Typ blokady", "Osoba odpowiedzialna", "Priorytet", "Kwota od-do"],
         tags: ["blokady", "zamknięcie miesiąca", "priorytet"],

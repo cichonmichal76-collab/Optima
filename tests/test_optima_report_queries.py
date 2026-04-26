@@ -22,6 +22,25 @@ def test_package_status_report_exposes_explicit_package_flags():
     assert query.notes
 
 
+def test_closing_blockers_report_exposes_explicit_blocker_flags():
+    query = build_report_query("closing-blockers", "202603")
+
+    assert "DuplicateDocuments" in query.sql
+    assert "SalesWithoutKsef" in query.sql
+    assert "BankWhitelistRisk" in query.sql
+    assert "KntWeryfRachHist" in query.sql
+    assert "VaN_NrKSeF" in query.sql
+    assert "[__flag_blokady_techniczne_brak_danych_blad_importu_duplikaty]" in query.sql
+    assert "[__flag_blokady_ksiegowe_i_schematowe_brak_dekretu_brak_schematu_schemat_bledny]" in query.sql
+    assert "[__flag_blokady_podatkowe_ksef_platnicze_merytoryczne_i_zarzadcze]" in query.sql
+    assert "[__flag_faktura_sprzedazy_bez_ksef]" in query.sql
+    assert "[__flag_platnosc_na_rachunek_spoza_bialej_listy]" in query.sql
+    assert "d.DoN_DataDok >= '2026-03-01'" in query.sql
+    assert "v.VaN_DataWys >= '2026-03-01'" in query.sql
+    assert "b.BZp_DataDok >= '2026-03-01'" in query.sql
+    assert query.notes
+
+
 def test_manual_entries_report_finds_entries_without_scheme():
     query = build_report_query("manual-entries", "202603")
 
@@ -134,6 +153,30 @@ def test_report_data_uses_explicit_package_status_query(monkeypatch):
     assert payload["rows"] == [{"Nazwa paczki": "OptimaAudit_Test", "Status paczki": "OK"}]
     assert payload["source"]["source_type"] == "report"
     assert payload["source"]["report"] == "package-status"
+
+
+def test_report_data_uses_explicit_closing_blockers_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "SalesWithoutKsef" in sql
+        assert "[Typ blokady]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Typ blokady", "Dokument"], [{"Typ blokady": "Podatkowa / KSeF", "Dokument": "FS/1/03/2026"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "closing-blockers",
+            "report_title": "Blokady zamknięcia miesiąca",
+            "module": "DOCUMENTS",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Typ blokady": "Podatkowa / KSeF", "Dokument": "FS/1/03/2026"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "closing-blockers"
 
 
 def test_report_data_defaults_to_selected_import_year(monkeypatch):
