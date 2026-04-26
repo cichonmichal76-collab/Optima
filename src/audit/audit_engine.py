@@ -116,7 +116,7 @@ class AuditEngine:
             "net_total": str(sum((record.net for record in vat_records), Decimal("0"))),
             "vat_total": str(sum((record.vat for record in vat_records), Decimal("0"))),
             "gross_total": str(sum((record.gross for record in vat_records), Decimal("0"))),
-            "disclaimer": "Wyniki wymagaja weryfikacji przez osobe odpowiedzialna za ksiegowosc.",
+            "disclaimer": "Wyniki wymagaj? weryfikacji przez osob? odpowiedzialn? za ksi?gowo??.",
         }
 
     @staticmethod

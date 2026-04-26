@@ -17,7 +17,7 @@ class OptimaFilterTarget:
 FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     "DOCUMENTS": OptimaFilterTarget(
         module="DOCUMENTS",
-        list_label="Obieg dokumentow / lista dokumentow",
+        list_label="Obieg dokumentÃ³w / lista dokumentÃ³w",
         id_field="DoN_DoNID",
         id_headers=("Optima DoNID",),
         number_field="DoN_NumerPelny",
@@ -25,7 +25,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "LEDGER": OptimaFilterTarget(
         module="LEDGER",
-        list_label="Zapisy ksiegowe / dekrety",
+        list_label="Zapisy ksiÄgowe / dekrety",
         id_field="DeN_DeNId",
         id_headers=("Optima DeNID",),
         number_field="DeN_NumerPelny",
@@ -41,7 +41,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "VAT_SALE": OptimaFilterTarget(
         module="VAT_SALE",
-        list_label="Rejestr VAT sprzedazy",
+        list_label="Rejestr VAT sprzedaÅ¼y",
         id_field="VaN_VaNID",
         id_headers=("Optima VaNID",),
         number_field="VaN_Dokument",
@@ -79,7 +79,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "CONTRACTORS": OptimaFilterTarget(
         module="CONTRACTORS",
-        list_label="Kartoteka kontrahentow",
+        list_label="Kartoteka kontrahentÃ³w",
         id_field="Knt_KntId",
         id_headers=("Optima KntID",),
         number_field="Knt_Kod",
@@ -87,7 +87,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "FIXED_ASSETS": OptimaFilterTarget(
         module="FIXED_ASSETS",
-        list_label="Srodki trwale",
+        list_label="Årodki trwaÅe",
         id_field="SrT_SrTID",
         id_headers=("Optima SrTID",),
         number_field="SrT_Dokument",
@@ -95,7 +95,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "HR_PAYROLL": OptimaFilterTarget(
         module="HR_PAYROLL",
-        list_label="Kadry i place",
+        list_label="Kadry i pÅace",
         id_field="PRE_PreId",
         id_headers=("Optima PreID",),
         number_field="PRE_Kod",
@@ -116,7 +116,7 @@ def build_optima_filter_snippets(
         return {
             "supported": False,
             "status": "unsupported",
-            "message": "Brak zdefiniowanego filtra dla tego modulu Optimy.",
+            "message": "Brak zdefiniowanego filtra dla tego moduÅu Optimy.",
         }
 
     if not rows:
@@ -133,7 +133,7 @@ def build_optima_filter_snippets(
         return {
             "supported": False,
             "status": "unsupported",
-            "message": "Ten wynik nie zawiera pewnego identyfikatora ani numeru pozwalajacego zbudowac filtr do Optimy.",
+            "message": "Ten wynik nie zawiera pewnego identyfikatora ani numeru pozwalaj?cego zbudowa? filtr do Optimy.",
             "target_list": target.list_label,
             "record_count": len(rows),
         }
@@ -152,9 +152,9 @@ def build_optima_filter_snippets(
         "secondary": secondary,
         "warning": warning,
         "instructions": [
-            f"Otworz w Optimie liste: {target.list_label}.",
-            "Na dole listy rozwin panel filtra zaawansowanego i uruchom Konstruktor filtra.",
-            "Na zakladce Zaawansowane wklej ponizszy warunek i uzyj Filtruj.",
+            f"Otw?rz w Optimie list?: {target.list_label}.",
+            "Na dole listy rozwi? panel filtra zaawansowanego i uruchom Konstruktor filtra.",
+            "Na zakÅadce Zaawansowane wklej poniÅ¼szy warunek i uÅ¼yj Filtruj.",
         ],
         "message": "Gotowy warunek do wklejenia w filtr zaawansowany Optimy.",
     }

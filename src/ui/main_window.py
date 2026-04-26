@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         new_audit_button.clicked.connect(self._start_audit)
         schema_button = QPushButton("Generator schematu")
         schema_button.clicked.connect(self._open_schema_wizard)
-        open_button = QPushButton("Otworz zapisany audyt")
+        open_button = QPushButton("OtwÃ³rz zapisany audyt")
         open_button.clicked.connect(self._open_saved_report)
         settings_button = QPushButton("Ustawienia")
         settings_button.clicked.connect(self._open_settings)
@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         elif import_result.data_kind == DataKind.JPK_XML:
             result = self.audit_engine.run(jpk_records=import_result.records, options=settings)
         else:
-            QMessageBox.information(self, "Import", "Plik zostal zaladowany do podgladu technicznego.")
+            QMessageBox.information(self, "Import", "Plik zosta? za?adowany do podgl?du technicznego.")
             return
 
         self.current_result = result
@@ -133,5 +133,5 @@ class MainWindow(QMainWindow):
             HtmlReportExporter().export(self.current_result, path.with_suffix(".html"))
         else:
             XlsxReportExporter().export(self.current_result, path.with_suffix(".xlsx"))
-        QMessageBox.information(self, "Eksport", "Raport zostal zapisany.")
+        QMessageBox.information(self, "Eksport", "Raport zosta? zapisany.")
 

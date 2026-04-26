@@ -30,7 +30,7 @@ class JpkXmlConnector(BaseConnector):
             detected_format=FormatKind.XML,
             headers=headers,
             preview_rows=rows[:20],
-            notes=["Minimalny podglad JPK/XML z obsluga namespace."],
+            notes=["Minimalny podgl?d JPK/XML z obs?ug? namespace."],
             xml_root=self._local_name(root.tag),
             namespaces=namespaces,
         )

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Optima SQL GUI</title>
-  <link rel="stylesheet" href="web/styles.css">
+  <link rel="stylesheet" href="web/styles.css?v=20260426-admin-only">
 </head>
 <body>
   <div class="app-shell">
@@ -26,10 +26,6 @@
           <span class="eyebrow">Podłączona baza</span>
           <h2 id="connectedDatabaseName">Brak podłączonej bazy</h2>
           <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz raport, który ma odpowiedzieć, co blokuje zamknięcie miesiąca.</p>
-          <div class="status-strip">
-            <span id="recordBadge">Źródła: 0</span>
-            <span id="selectedReportBadge">Widok: START</span>
-          </div>
         </div>
 
         <div class="time-filter-bar" aria-label="Filtry globalne raportów">
@@ -171,13 +167,30 @@
           </p>
         </section>
 
+        <section class="panel admin-menu-panel" aria-label="Menu administracji">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Menu administracji</span>
+              <h3>Walidacja zgodności Excel vs SQL</h3>
+            </div>
+            <span class="muted">Wszystkie sekcje tej ścieżki są częścią walidacji</span>
+          </div>
+          <nav class="admin-menu-links">
+            <a class="admin-menu-link" href="#adminValidationSection">Plik do weryfikacji</a>
+            <a class="admin-menu-link" href="#adminPreviewSection">Podgląd eksportu</a>
+            <a class="admin-menu-link" href="#adminValidationMetrics">Metryki walidacji</a>
+            <a class="admin-menu-link" href="#adminMappingSection">Mapowanie pól</a>
+            <a class="admin-menu-link" href="#adminDiffSection">Rozbieżności</a>
+            <a class="admin-menu-link" href="#adminTotalsSection">Sumy i próbki SQL</a>
+          </nav>
+        </section>
+
         <div class="admin-grid">
-          <section class="panel admin-panel">
+          <section id="adminValidationSection" class="panel admin-panel">
             <div class="panel-head">
               <div>
                 <h3>Plik do weryfikacji</h3>
                 <span id="adminValidationScope" class="muted">Lista profili zostanie załadowana po starcie aplikacji.</span>
-                <span class="muted">Obsługiwane profile: VAT zakup, VAT sprzedaż, zapisy księgowe, plan kont</span>
               </div>
             </div>
             <div class="admin-form">
@@ -205,7 +218,7 @@
             <div id="adminValidationMeta" class="connection-status" hidden>Walidacja SQL oczekuje na plik.</div>
           </section>
 
-          <section class="panel admin-panel">
+          <section id="adminPreviewSection" class="panel admin-panel">
             <div class="panel-head">
               <div>
                 <h3>Podgląd eksportu</h3>
@@ -223,10 +236,10 @@
           </section>
         </div>
 
-        <section class="metrics-grid" id="adminValidationMetrics"></section>
+        <section id="adminValidationMetrics" class="metrics-grid" aria-label="Metryki walidacji"></section>
 
         <div class="admin-grid">
-          <section class="panel admin-panel">
+          <section id="adminMappingSection" class="panel admin-panel">
             <div class="panel-head">
               <div>
                 <h3>Mapowanie pól</h3>
@@ -250,7 +263,7 @@
             </div>
           </section>
 
-          <section class="panel admin-panel">
+          <section id="adminDiffSection" class="panel admin-panel">
             <div class="panel-head">
               <div>
                 <h3>Rozbieżności</h3>
@@ -274,7 +287,7 @@
           </section>
         </div>
 
-        <section class="panel admin-panel">
+        <section id="adminTotalsSection" class="panel admin-panel">
           <div class="panel-head">
             <div>
               <h3>Sumy kontrolne i próbki SQL</h3>
@@ -370,7 +383,10 @@
               <h3>Wyniki raportu</h3>
               <span class="muted" id="reportDataMeta">Wybierz raport z podpiętym zapytaniem SQL.</span>
             </div>
-            <button id="refreshReportData" class="plain-button" type="button">Odśwież wyniki</button>
+            <div class="panel-head-actions">
+              <button id="toggleReportCustomize" class="plain-button" type="button" aria-expanded="false">Dostosuj</button>
+              <button id="refreshReportData" class="plain-button" type="button">Odśwież wyniki</button>
+            </div>
           </div>
           <div class="table-wrap report-table-wrap">
             <table>
@@ -382,6 +398,16 @@
           </div>
         </section>
 
+        <section id="reportCustomizePanel" class="panel report-customize-panel" hidden>
+          <div class="panel-head">
+            <div>
+              <h3>Dostosuj raport</h3>
+              <span class="muted">Układ raportu: kolumny, widoczność i kolejność</span>
+            </div>
+          </div>
+          <div class="stack-list" id="reportLayoutList"></div>
+        </section>
+
         <div class="report-layout">
           <section class="panel">
             <div class="panel-head">
@@ -389,14 +415,6 @@
               <span class="muted" id="reportScopeMeta">Kontrole kluczowe dla wybranego raportu</span>
             </div>
             <div class="stack-list" id="reportControls"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <h3>Układ raportu</h3>
-              <span class="muted">Kolumny i sekcje</span>
-            </div>
-            <div class="stack-list" id="reportLayoutList"></div>
           </section>
         </div>
 
@@ -413,6 +431,6 @@
     </main>
   </div>
 
-  <script type="module" src="web/app.js"></script>
+  <script type="module" src="web/app.js?v=20260426-report-customize"></script>
 </body>
 </html>

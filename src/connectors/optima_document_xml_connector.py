@@ -24,7 +24,7 @@ class OptimaDocumentXmlConnector(BaseConnector):
             detected_format=FormatKind.XML,
             headers=["tag"],
             preview_rows=[{"tag": child.tag.split("}", 1)[-1]} for child in list(root)[:20]],
-            notes=["Podglad techniczny dokumentu XML Optimy."],
+            notes=["PodglÄd techniczny dokumentu XML Optimy."],
             xml_root=root.tag.split("}", 1)[-1],
         )
 
@@ -38,8 +38,8 @@ class OptimaDocumentXmlConnector(BaseConnector):
                 area="DOCUMENT_XML",
                 source_file=str(file_path),
                 issue_code="DOCUMENT_XML_PREVIEW_ONLY",
-                issue="Parser dokumentow XML w MVP dziala w trybie technicznego podgladu.",
-                recommendation="Wykorzystaj wynik do audytu i rozszerz parser po zebraniu wzorcowych plikow.",
+                issue="Parser dokumentów XML w MVP działa w trybie technicznego podglądu.",
+                recommendation="Wykorzystaj wynik do audytu i rozszerz parser po zebraniu wzorcowych plikÃ³w.",
                 confidence=0.9,
             )
         ]

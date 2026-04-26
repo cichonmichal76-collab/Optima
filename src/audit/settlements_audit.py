@@ -24,8 +24,8 @@ class SettlementsAudit:
                         contractor=record.contractor_name,
                         date=record.payment_date,
                         issue_code="SETTLEMENT_PAYMENT_WITHOUT_DOCUMENT",
-                        issue="Platnosc nie ma powiazanego dokumentu.",
-                        recommendation="Powiaz platnosc z dokumentem zrodlowym lub popraw eksport.",
+                        issue="P?atno?? nie ma powi?zanego dokumentu.",
+                        recommendation="Powi?? p?atno?? z dokumentem ?r?d?owym lub popraw eksport.",
                         confidence=0.9,
                     )
                 )
@@ -39,7 +39,7 @@ class SettlementsAudit:
                         date=record.due_date,
                         issue_code="SETTLEMENT_OVERDUE",
                         issue="Rozrachunek jest przeterminowany.",
-                        recommendation="Zweryfikuj windykacje lub harmonogram platnosci.",
+                        recommendation="Zweryfikuj windykacj? lub harmonogram p?atno?ci.",
                         confidence=0.95,
                     )
                 )
@@ -52,8 +52,8 @@ class SettlementsAudit:
                         contractor=record.contractor_name,
                         date=record.payment_date,
                         issue_code="SETTLEMENT_PARTIAL_PAYMENT",
-                        issue="Wykryto platnosc czesciowa.",
-                        recommendation="Zweryfikuj, czy czesciowe rozliczenie jest oczekiwane.",
+                        issue="Wykryto p?atno?? cz??ciow?.",
+                        recommendation="Zweryfikuj, czy cz??ciowe rozliczenie jest oczekiwane.",
                         confidence=0.9,
                     )
                 )
@@ -68,8 +68,8 @@ class SettlementsAudit:
                         area="SETTLEMENTS",
                         document_number=document_number,
                         issue_code="SETTLEMENT_CONTRACTOR_MISMATCH",
-                        issue="Ten sam rozrachunek wystepuje na roznych kontrahentach.",
-                        recommendation="Zweryfikuj polaczenie rozrachunku z kontrahentem.",
+                        issue="Ten sam rozrachunek wyst?puje na r??nych kontrahentach.",
+                        recommendation="Zweryfikuj po??czenie rozrachunku z kontrahentem.",
                         confidence=0.85,
                     )
                 )
@@ -80,8 +80,8 @@ class SettlementsAudit:
                         area="SETTLEMENTS",
                         document_number=document_number,
                         issue_code="SETTLEMENT_ACCOUNT_MISMATCH",
-                        issue="Rozrachunek wystepuje na roznych kontach.",
-                        recommendation="Zweryfikuj konfiguracje kont rozrachunkowych.",
+                        issue="Rozrachunek wyst?puje na r??nych kontach.",
+                        recommendation="Zweryfikuj konfiguracj? kont rozrachunkowych.",
                         confidence=0.85,
                     )
                 )

@@ -14,7 +14,7 @@ class JpkAudit:
                     level="WARNING",
                     area="JPK",
                     issue_code="JPK_EMPTY",
-                    issue="Parser JPK nie znalazl rekordow do analizy.",
+                    issue="Parser JPK nie znalaz? rekord?w do analizy.",
                     recommendation="Zweryfikuj strukturę XML, namespace i typ pliku.",
                     confidence=0.85,
                 )
@@ -31,7 +31,7 @@ class JpkAudit:
                         contractor=record.contractor_name,
                         issue_code="JPK_MISSING_DOCUMENT",
                         issue="Wiersz JPK nie zawiera numeru dokumentu.",
-                        recommendation="Sprawdz zrodlo XML i mapowanie pol parsera.",
+                        recommendation="Sprawd? ?r?d?o XML i mapowanie p?l parsera.",
                         confidence=0.8,
                     )
                 )

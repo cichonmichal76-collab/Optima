@@ -26,7 +26,7 @@ class OptimaSchemaXmlConnector(BaseConnector):
             detected_format=FormatKind.XML,
             headers=["tag"],
             preview_rows=preview_rows,
-            notes=["Techniczny podglad XML schematu ksiegowego."],
+            notes=["Techniczny podgląd XML schematu księgowego."],
             xml_root=self._local_name(root.tag),
         )
 
@@ -42,8 +42,8 @@ class OptimaSchemaXmlConnector(BaseConnector):
                     area="SCHEMA_XML",
                     source_file=str(file_path),
                     issue_code="SCHEMA_POSITIONS_MISSING",
-                    issue="Nie znaleziono elementow pozycji schematu.",
-                    recommendation="Zweryfikuj, czy eksportowany XML pochodzi ze schematu ksiegowego Optimy.",
+                    issue="Nie znaleziono elementÃ³w pozycji schematu.",
+                    recommendation="Zweryfikuj, czy eksportowany XML pochodzi ze schematu ksiÄgowego Optimy.",
                     confidence=0.8,
                 )
             )
@@ -55,7 +55,7 @@ class OptimaSchemaXmlConnector(BaseConnector):
                     source_file=str(file_path),
                     issue_code="SCHEMA_ACCOUNT_MISSING",
                     issue="Nie znaleziono definicji kont w XML.",
-                    recommendation="Zweryfikuj strukture XML i uzupelnij walidacje na bazie eksportu wzorcowego.",
+                    recommendation="Zweryfikuj struktur? XML i uzupe?nij walidacj? na bazie eksportu wzorcowego.",
                     confidence=0.75,
                 )
             )

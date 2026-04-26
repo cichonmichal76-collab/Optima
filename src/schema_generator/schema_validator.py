@@ -12,7 +12,7 @@ class SchemaValidator:
                     "CRITICAL",
                     draft,
                     "SCHEMA_EMPTY",
-                    "Schemat nie zawiera zadnych pozycji.",
+                    "Schemat nie zawiera Å¼adnych pozycji.",
                     "Dodaj pozycje Wn/Ma do projektu schematu.",
                 )
             )
@@ -26,7 +26,7 @@ class SchemaValidator:
                     draft,
                     "SCHEMA_SIDE_MISSING",
                     "Schemat nie zawiera obu stron Wn/Ma.",
-                    "Uzupelnij brakujaca strone dekretu.",
+                    "Uzupełnij brakuj?c? stron? dekretu.",
                 )
             )
 
@@ -36,8 +36,8 @@ class SchemaValidator:
                     "WARNING",
                     draft,
                     "SCHEMA_CONDITION_TOO_BROAD",
-                    "Warunek schematu jest zbyt ogolny.",
-                    "Doprecyzuj warunek, aby schemat nie lapal zbyt wielu dokumentow.",
+                    "Warunek schematu jest zbyt ogÃ³lny.",
+                    "Doprecyzuj warunek, aby schemat nie ?apa? zbyt wielu dokument?w.",
                     confidence=0.85,
                 )
             )
@@ -50,7 +50,7 @@ class SchemaValidator:
                         draft,
                         "SCHEMA_ACCOUNT_MISSING",
                         "Jedna z pozycji nie ma przypisanego konta.",
-                        "Uzupelnij konto po stronie Wn lub Ma.",
+                        "UzupeÅnij konto po stronie Wn lub Ma.",
                     )
                 )
             if not line.amount_expression:
@@ -60,7 +60,7 @@ class SchemaValidator:
                         draft,
                         "SCHEMA_AMOUNT_MISSING",
                         "Jedna z pozycji nie ma definicji kwoty.",
-                        "Uzupelnij sposob wyliczenia kwoty.",
+                        "UzupeÅnij sposÃ³b wyliczenia kwoty.",
                     )
                 )
 
@@ -70,8 +70,8 @@ class SchemaValidator:
                     "WARNING",
                     draft,
                     "SCHEMA_VAT_SPLIT",
-                    "Schemat 50% VAT nie zawiera wyraznego rozbicia kwoty VAT.",
-                    "Zweryfikuj czesc odliczona i nieodliczona VAT.",
+                    "Schemat 50% VAT nie zawiera wyraÅºnego rozbicia kwoty VAT.",
+                    "Zweryfikuj cz??? odliczon? i nieodliczon? VAT.",
                     confidence=0.85,
                 )
             )

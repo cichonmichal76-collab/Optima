@@ -19,7 +19,7 @@ class SchemaWizard(QDialog):
         self.xml_generator = OptimaXmlTemplateGenerator()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Wybierz wzorzec schematu ksiegowego."))
+        layout.addWidget(QLabel("Wybierz wzorzec schematu ksiÄgowego."))
 
         self.template_combo = QComboBox()
         for item in self.template_library.list_templates():
@@ -50,7 +50,7 @@ class SchemaWizard(QDialog):
         for issue in issues:
             text.append(f"- {issue.level}: {issue.issue}")
         text.append("")
-        text.append("Podglad XML:")
+        text.append("PodglÄd XML:")
         text.append(preview_xml)
         self.output.setPlainText("\n".join(text))
 

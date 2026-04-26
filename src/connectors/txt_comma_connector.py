@@ -18,7 +18,7 @@ class TxtCommaConnector(BaseConnector):
             detected_format=FormatKind.TXT,
             headers=["line"],
             preview_rows=[{"line": line} for line in lines],
-            notes=["Format legacy. Obsluga eksperymentalna w MVP."],
+            notes=["Format legacy. ObsÅuga eksperymentalna w MVP."],
         )
 
     def load(self, file_path: Path, mapping: MappingProfile | None = None) -> ImportResult:
@@ -29,7 +29,7 @@ class TxtCommaConnector(BaseConnector):
                 source_file=str(file_path),
                 issue_code="LEGACY_FORMAT",
                 issue="Format TXT/COMMA jest przygotowany architektonicznie, ale parser nie jest jeszcze kompletny.",
-                recommendation="Uzyj eksportu XLSX/CSV albo rozbuduj parser legacy na podstawie probki pliku.",
+                recommendation="UÅ¼yj eksportu XLSX/CSV albo rozbuduj parser legacy na podstawie prÃ³bki pliku.",
                 confidence=0.95,
             )
         ]

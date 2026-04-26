@@ -143,7 +143,7 @@ export const TEMPLATES = {
     lines: [
       ["WN", "{{cost_account}}", "net", "Koszt netto"],
       ["WN", "{{vat_account}}", "vat", "VAT naliczony"],
-      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawca"],
+      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawcą"],
     ],
   },
   FZ_PALIWO_50: {
@@ -152,7 +152,7 @@ export const TEMPLATES = {
     lines: [
       ["WN", "{{fuel_account}}", "net + vat_nondeductible", "Koszt paliwa"],
       ["WN", "{{vat_account}}", "vat_deductible", "VAT odliczalny"],
-      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawca"],
+      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawcą"],
     ],
   },
   FZ_BEZ_VAT: {
@@ -160,20 +160,20 @@ export const TEMPLATES = {
     condition: "document_type == 'FZ' and vat == 0",
     lines: [
       ["WN", "{{cost_account}}", "gross", "Koszt brutto"],
-      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawca"],
+      ["MA", "{{supplier_account}}", "gross", "Rozrachunek z dostawcą"],
     ],
   },
   FS_23: {
-    name: "FS sprzedaz krajowa 23%",
+    name: "FS sprzedaż krajowa 23%",
     condition: "document_type == 'FS' and vat_rate == '23%'",
     lines: [
-      ["WN", "{{customer_account}}", "gross", "Naleznosc od odbiorcy"],
-      ["MA", "{{revenue_account}}", "net", "Przychod"],
-      ["MA", "{{vat_due_account}}", "vat", "VAT nalezny"],
+      ["WN", "{{customer_account}}", "gross", "Należność od odbiorcy"],
+      ["MA", "{{revenue_account}}", "net", "Przychód"],
+      ["MA", "{{vat_due_account}}", "vat", "VAT należny"],
     ],
   },
   WB_BANK_FEE: {
-    name: "WB oplata bankowa",
+    name: "WB opłata bankowa",
     condition: "document_type == 'WB' and kind == 'BANK_FEE'",
     lines: [
       ["WN", "{{financial_cost_account}}", "amount", "Koszt bankowy"],
@@ -189,11 +189,11 @@ export const TEMPLATES = {
     ],
   },
   LP: {
-    name: "LP lista plac",
+    name: "LP lista płac",
     condition: "document_type == 'LP'",
     lines: [
-      ["WN", "{{salary_cost_account}}", "gross_salary", "Koszt wynagrodzen"],
-      ["MA", "{{employee_liability_account}}", "net_salary", "Wyplata netto"],
+      ["WN", "{{salary_cost_account}}", "gross_salary", "Koszt wynagrodzeń"],
+      ["MA", "{{employee_liability_account}}", "net_salary", "Wypłata netto"],
       ["MA", "{{tax_liability_account}}", "tax", "Podatek"],
       ["MA", "{{social_security_account}}", "social_security", "ZUS"],
     ],
@@ -202,10 +202,10 @@ export const TEMPLATES = {
 
 export const VIEW_TITLES = {
   database: ["Baza SQL", "Podłączenie lokalnej kopii Optimy z pliku BAK/BAC."],
-  audit: ["Audyt", "Import, podglad i szybka walidacja eksportu."],
+  audit: ["Audyt", "Import, podgląd i szybka walidacja eksportu."],
   mapping: ["Mapowanie", "Dopasowanie kolumn z pliku do modelu kanonicznego."],
-  schema: ["Schemat", "Projekt dekretow bez importu do Optimy."],
-  report: ["Raport", "Eksport wynikow lokalnie z przegladarki."],
+  schema: ["Schemat", "Projekt dekretów bez importu do Optimy."],
+  report: ["Raport", "Eksport wyników lokalnie z przeglądarki."],
 };
 
 export const VAT_RATES = new Set(["0", "0%", "5", "5%", "8", "8%", "23", "23%", "zw", "np", "oo"]);

@@ -46,7 +46,7 @@ class HtmlReportExporter:
 </head>
 <body>
   <h1>Raport audytu Optima</h1>
-  <div class="note">Wyniki wymagaja weryfikacji przez osobe odpowiedzialna za ksiegowosc.</div>
+  <div class="note">Wyniki wymagaj? weryfikacji przez osob? odpowiedzialn? za ksi?gowo??.</div>
   <h2>Podsumowanie</h2>
   <ul>{summary_lines}</ul>
   <h2>Wyniki</h2>
@@ -61,7 +61,7 @@ class HtmlReportExporter:
         <th>Data</th>
         <th>Problem</th>
         <th>Rekomendacja</th>
-        <th>Pewnosc</th>
+        <th>Pewno??</th>
       </tr>
     </thead>
     <tbody>

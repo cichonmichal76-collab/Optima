@@ -14,8 +14,8 @@ export function runAudit(kind, rows, mapping) {
       area: kind,
       document: "",
       contractor: "",
-      issue: "Ten typ danych ma w web GUI tryb podgladu.",
-      recommendation: "Pelna walidacja jest w aplikacji Python.",
+      issue: "Ten typ danych ma w web GUI tryb podglądu.",
+      recommendation: "Pełna walidacja jest w aplikacji Python.",
     }],
     records: [],
   };
@@ -37,7 +37,7 @@ export function buildSummary(issues, records = []) {
     document_count: documents.size,
     contractor_count: contractors.size,
     gross_total: gross.toFixed(2),
-    disclaimer: "Wyniki wymagaja weryfikacji przez osobe odpowiedzialna za ksiegowosc.",
+    disclaimer: "Wyniki wymagają weryfikacji przez osobę odpowiedzialną za księgowość.",
   };
 }
 
@@ -69,24 +69,24 @@ function auditVat(rows, mapping) {
       issues.push({
         level: "CRITICAL",
         ...base,
-        issue: `Netto + VAT = ${formatAmount(expectedGross)}, Brutto = ${formatAmount(record.gross)} (roznica ${formatAmount(difference)}).`,
+        issue: `Netto + VAT = ${formatAmount(expectedGross)}, Brutto = ${formatAmount(record.gross)} (różnica ${formatAmount(difference)}).`,
         recommendation: "Zweryfikuj kwoty i mapowanie kolumn Netto, VAT oraz Brutto.",
       });
     }
     if (!record.document) {
-      issues.push({ level: "CRITICAL", ...base, issue: "Brak numeru dokumentu.", recommendation: "Uzupelnij numer dokumentu lub mapowanie." });
+      issues.push({ level: "CRITICAL", ...base, issue: "Brak numeru dokumentu.", recommendation: "Uzupełnij numer dokumentu lub mapowanie." });
     }
     if (!record.contractor || !record.nip) {
       issues.push({ level: "WARNING", ...base, issue: "Brak kontrahenta lub NIP.", recommendation: "Zweryfikuj dane kontrahenta." });
     }
     if (record.vatRate && !VAT_RATES.has(String(record.vatRate).toLowerCase().replace(/\s/g, ""))) {
-      issues.push({ level: "WARNING", ...base, issue: `Nietypowa stawka VAT: ${record.vatRate}.`, recommendation: "Sprawdz konfiguracje stawek." });
+      issues.push({ level: "WARNING", ...base, issue: `Nietypowa stawka VAT: ${record.vatRate}.`, recommendation: "Sprawdź konfigurację stawek." });
     }
     if (record.vat < 0 && !String(record.document).toLowerCase().includes("kor")) {
       issues.push({ level: "WARNING", ...base, issue: "Ujemny VAT bez oznaczenia korekty.", recommendation: "Zweryfikuj typ dokumentu." });
     }
     if (seen.get(`${record.document}|${record.nip}`) > 1) {
-      issues.push({ level: "WARNING", ...base, issue: "Duplikat numeru dokumentu i NIP.", recommendation: "Sprawdz, czy dokument nie jest w imporcie wielokrotnie." });
+      issues.push({ level: "WARNING", ...base, issue: "Duplikat numeru dokumentu i NIP.", recommendation: "Sprawdź, czy dokument nie jest w imporcie wielokrotnie." });
     }
   });
   return { issues, records };
@@ -119,17 +119,17 @@ function auditLedger(rows, mapping) {
 
   records.forEach((record) => {
     const base = { area: "LEDGER", document: record.document, contractor: record.contractor };
-    if (!record.accountWn && !record.account) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Wn albo konta zapisu.", recommendation: "Uzupelnij mapowanie konta Wn albo pola Konto z Optimy." });
-    if (!record.accountMa && !record.accountOpposite) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Ma albo konta przeciwstawnego.", recommendation: "Uzupelnij mapowanie konta Ma albo pola Konto przeciw. z Optimy." });
-    if (!record.amountWn && !record.amountMa) issues.push({ level: "CRITICAL", ...base, issue: "Puste kwoty Wn/Ma.", recommendation: "Sprawdz mapowanie kwot." });
-    if (!record.description) issues.push({ level: "WARNING", ...base, issue: "Brak opisu ksiegowania.", recommendation: "Uzupelnij opis." });
+    if (!record.accountWn && !record.account) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Wn albo konta zapisu.", recommendation: "Uzupełnij mapowanie konta Wn albo pola Konto z Optimy." });
+    if (!record.accountMa && !record.accountOpposite) issues.push({ level: "CRITICAL", ...base, issue: "Brak konta Ma albo konta przeciwstawnego.", recommendation: "Uzupełnij mapowanie konta Ma albo pola Konto przeciw. z Optimy." });
+    if (!record.amountWn && !record.amountMa) issues.push({ level: "CRITICAL", ...base, issue: "Puste kwoty Wn/Ma.", recommendation: "Sprawdź mapowanie kwot." });
+    if (!record.description) issues.push({ level: "WARNING", ...base, issue: "Brak opisu księgowania.", recommendation: "Uzupełnij opis." });
   });
 
   grouped.forEach((items, document) => {
     const wn = items.reduce((sum, item) => sum + item.amountWn, 0);
     const ma = items.reduce((sum, item) => sum + item.amountMa, 0);
     if (Math.abs(wn - ma) > 0.02) {
-      issues.push({ level: "CRITICAL", area: "LEDGER", document, contractor: items[0]?.contractor || "", issue: "Dokument jest niezbilansowany.", recommendation: "Zweryfikuj komplet dekretow." });
+      issues.push({ level: "CRITICAL", area: "LEDGER", document, contractor: items[0]?.contractor || "", issue: "Dokument jest niezbilansowany.", recommendation: "Zweryfikuj komplet dekretów." });
     }
   });
   return { issues, records };

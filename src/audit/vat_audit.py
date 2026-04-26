@@ -31,8 +31,8 @@ class VatAudit:
                         "CRITICAL",
                         record,
                         "VAT_SUM_MISMATCH",
-                        "Netto + VAT nie zgadza sie z brutto.",
-                        "Zweryfikuj kwoty na dokumencie i sposob eksportu danych.",
+                        "Netto + VAT nie zgadza si? z brutto.",
+                        "Zweryfikuj kwoty na dokumencie i sposÃ³b eksportu danych.",
                     )
                 )
             if not record.document_number.strip():
@@ -42,7 +42,7 @@ class VatAudit:
                         record,
                         "VAT_MISSING_DOCUMENT",
                         "Brak numeru dokumentu VAT.",
-                        "Uzupelnij numer dokumentu lub popraw mapowanie kolumn.",
+                        "UzupeÅnij numer dokumentu lub popraw mapowanie kolumn.",
                     )
                 )
             if not record.contractor_name or not record.contractor_nip:
@@ -74,7 +74,7 @@ class VatAudit:
                         record,
                         "VAT_DUPLICATE",
                         "Wykryto duplikat numeru faktury i NIP.",
-                        "Sprawdz, czy dokument nie zostal zaimportowany wielokrotnie.",
+                        "Sprawd?, czy dokument nie zosta? zaimportowany wielokrotnie.",
                     )
                 )
 
@@ -98,8 +98,8 @@ class VatAudit:
                         "WARNING",
                         record,
                         "VAT_NEGATIVE_WITHOUT_CORRECTION",
-                        "Kwota VAT jest ujemna, ale dokument nie wyglada na korekte.",
-                        "Sprawdz oznaczenie korekty albo poprawnosc danych liczbowych.",
+                        "Kwota VAT jest ujemna, ale dokument nie wygl?da na korekt?.",
+                        "Sprawd? oznaczenie korekty albo poprawno?? danych liczbowych.",
                     )
                 )
 
@@ -117,8 +117,8 @@ class VatAudit:
                             "WARNING",
                             record,
                             "VAT_ACCOUNT_MISSING",
-                            "Dokument VAT nie ma powiazanego konta VAT w ksiegowaniach.",
-                            "Zweryfikuj konfiguracje kont VAT oraz dekretacje dokumentu.",
+                            "Dokument VAT nie ma powiÄzanego konta VAT w ksiÄgowaniach.",
+                            "Zweryfikuj konfiguracj? kont VAT oraz dekretacj? dokumentu.",
                             confidence=0.8,
                         )
                     )

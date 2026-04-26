@@ -50,7 +50,7 @@ class ImportWizard(QDialog):
         file_row.addWidget(browse_button)
         layout.addLayout(file_row)
 
-        preview_button = QPushButton("Podglad i mapowanie")
+        preview_button = QPushButton("PodglÄd i mapowanie")
         preview_button.clicked.connect(self._preview_and_map)
         layout.addWidget(preview_button)
 
@@ -58,7 +58,7 @@ class ImportWizard(QDialog):
         self.preview_box.setReadOnly(True)
         layout.addWidget(self.preview_box)
 
-        import_button = QPushButton("Zaladuj dane")
+        import_button = QPushButton("ZaÅaduj dane")
         import_button.clicked.connect(self._load_import)
         layout.addWidget(import_button)
 

@@ -14,6 +14,7 @@ export function createInitialState() {
     reportDataKey: "",
     reportDataError: "",
     reportChartEnabled: false,
+    reportCustomizeOpen: false,
     reportFilterValues: {},
     reportControlSelections: {},
     reportAlertSelections: {},
@@ -34,6 +35,7 @@ export function createInitialState() {
     currentModule: "",
     currentView: "start",
     currentReportKey: "package-status",
+    expandedSidebarGroupId: "",
     format: "-",
     fileName: "",
   };
