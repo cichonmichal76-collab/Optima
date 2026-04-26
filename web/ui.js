@@ -916,6 +916,7 @@ const REPORT_GROUPS = [
         queryKey: "buildings",
         sources: ["Optima", "Księga"],
         filters: ["Okres od-do", "Budowa", "Rok", "Miesiac", "Kwota od-do"],
+        visibleFilters: ["Budowa"],
         tags: ["budowy", "marża", "przychody", "koszty"],
         primaryModule: "LEDGER",
         relatedModules: ["LEDGER", "ACCOUNT_PLAN"],
@@ -1104,9 +1105,9 @@ const IMPORT_YEARS_STORAGE_KEY = "optimaAudit.importYears";
 const SIMPLE_STACK_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const SELECTION_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
+const REPORTS_WITH_VISIBLE_FILTER_PANEL = new Set(["buildings"]);
 const EMBEDDED_HEADER_FILTERS = {
   buildings: [
-    { header: "Budowa", filter: "Budowa", type: "select", emptyLabel: "Wszystkie budowy", headers: ["Budowa"] },
     { header: "Rok", filter: "Rok", type: "select", emptyLabel: "Wszystkie lata", headers: ["Rok"] },
     { header: "Miesiac", filter: "Miesiac", type: "select", emptyLabel: "Wszystkie miesiące", headers: ["Miesiac"] },
     { header: "Przychody", filter: "Przychody", type: "number-condition", headers: ["Przychody"] },
@@ -3599,13 +3600,15 @@ function keywordsFromText(text) {
 function renderReportFilterControls(report, state) {
   const filterCard = $("#reportFilterCard");
   const useEmbeddedHeaders = reportUsesEmbeddedHeaderFilters(report);
-  filterCard.hidden = useEmbeddedHeaders;
-  if (useEmbeddedHeaders) {
+  const showFilterPanel = !useEmbeddedHeaders || REPORTS_WITH_VISIBLE_FILTER_PANEL.has(report?.key);
+  filterCard.hidden = !showFilterPanel;
+  if (!showFilterPanel) {
     $("#reportFilterFields").innerHTML = "";
     updateReportFilterMeta(state);
     return;
   }
-  const controls = report.filters.map((filter) => reportFilterControl(filter, state)).join("");
+  const visibleFilters = report.visibleFilters?.length ? report.visibleFilters : report.filters;
+  const controls = visibleFilters.map((filter) => reportFilterControl(filter, state)).join("");
   $("#reportFilterFields").innerHTML = controls || '<div class="available-card is-empty">Ten raport nie ma dodatkowych filtrów.</div>';
   updateReportFilterMeta(state);
 }
