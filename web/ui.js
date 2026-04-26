@@ -2683,7 +2683,6 @@ function renderReportData(state) {
   const rowsBelongToReport = state.reportDataKey === report.key;
   const visibleHeaders = getVisibleReportHeaders(state);
   $("#refreshReportData").disabled = !$("#sqlDatabase").value.trim() || status === "loading";
-  renderReportFilterIndicator(state);
 
   if (!$("#sqlDatabase").value.trim()) {
     renderReportDataPlaceholder(
@@ -2726,13 +2725,15 @@ function renderReportData(state) {
     state.reportRows,
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
   );
+  renderReportFilterIndicator(state);
   renderReportCompanionPanels(state);
 }
 
 function renderReportDataPlaceholder(state, metaText, emptyMessage) {
+  const placeholderHeaders = getVisibleReportHeaders(state);
   $("#reportDataMeta").textContent = metaText;
+  renderReportTable(state, placeholderHeaders, [], emptyMessage);
   renderReportFilterIndicator(state);
-  renderReportTable(state, [], [], emptyMessage);
   renderReportCompanionPanels(state);
 }
 
@@ -3926,10 +3927,7 @@ function renderReportFilterIndicator(state) {
 
 function reportHasRenderedHeaderFilters(state, report) {
   if (!reportUsesEmbeddedHeaderFilters(report)) return false;
-  if (state.reportDataStatus !== "ready" || state.reportDataKey !== report?.key) return false;
-  const headers = getVisibleReportHeaders(state);
-  if (!headers.length) return false;
-  return embeddedHeaderFiltersForReport(report, headers).length > 0;
+  return document.querySelectorAll("#reportDataHead [data-report-filter]").length > 0;
 }
 
 function filterControlType(filter) {
