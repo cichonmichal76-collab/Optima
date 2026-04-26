@@ -994,7 +994,7 @@ function bindEvents(state) {
   $("#reportLayoutList").addEventListener("click", (event) => {
     const moveButton = event.target.closest("[data-layout-move]");
     if (!moveButton) return;
-    moveReportColumn(state, moveButton.dataset.layoutColumn, moveButton.dataset.layoutMove);
+    moveReportColumn(state, moveButton.dataset.layoutTarget, moveButton.dataset.layoutMove);
   });
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
@@ -2145,14 +2145,14 @@ function renderLayoutEditor(state) {
     const upDisabled = index === 0 ? " disabled" : "";
     const downDisabled = index === headers.length - 1 ? " disabled" : "";
     return `
-      <div class="stack-layout-row stack-item stack-item-layout" data-layout-header="${escapeHtml(header)}">
+        <div class="stack-layout-row stack-item stack-item-layout" data-layout-header="${escapeHtml(header)}">
         <label class="stack-layout-toggle">
           <input type="checkbox" data-layout-column="${escapeHtml(header)}"${checked}>
           <span>${escapeHtml(header)}</span>
         </label>
         <div class="stack-layout-actions">
-          <button type="button" class="stack-layout-button" data-layout-column="${escapeHtml(header)}" data-layout-move="up" title="Przesuń kolumnę wyżej"${upDisabled}>↑</button>
-          <button type="button" class="stack-layout-button" data-layout-column="${escapeHtml(header)}" data-layout-move="down" title="Przesuń kolumnę niżej"${downDisabled}>↓</button>
+          <button type="button" class="stack-layout-button" data-layout-target="${escapeHtml(header)}" data-layout-move="up" title="Przesuń kolumnę wyżej"${upDisabled}>↑</button>
+          <button type="button" class="stack-layout-button" data-layout-target="${escapeHtml(header)}" data-layout-move="down" title="Przesuń kolumnę niżej"${downDisabled}>↓</button>
         </div>
       </div>`;
   }).join("");
@@ -2177,7 +2177,7 @@ function rememberSelectableValues(containerSelector) {
 
 function rememberColumnVisibility(state) {
   const hidden = {};
-  document.querySelectorAll("#reportLayoutList [data-layout-column]").forEach((input) => {
+  document.querySelectorAll("#reportLayoutList input[type='checkbox'][data-layout-column]").forEach((input) => {
     hidden[input.dataset.layoutColumn] = !input.checked;
   });
   state.reportHiddenColumns = hidden;
