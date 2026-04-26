@@ -103,6 +103,7 @@ const ADMIN_PROFILES_BY_CODE = Object.fromEntries(ADMIN_EXPORT_PROFILES.map((pro
 const ADMIN_SQL_VALIDATION_KINDS = new Set(
   ADMIN_EXPORT_PROFILES.filter((profile) => profile.support === "sql").map((profile) => profile.code),
 );
+const ROUTABLE_STATIC_VIEWS = new Set(["start", "communication", "administration"]);
 
 const ADMIN_VALIDATION_LABELS = {
   VAT_PURCHASE: "Rejestr VAT zakup",
@@ -1270,6 +1271,7 @@ export function initApp(state) {
   populateAdminValidationProfiles();
   refreshAdminProfileInputs();
   state.favoriteReports = restoreFavoriteReports();
+  applyRouteFromLocation(state);
   renderSideMenu(state);
   renderStartFavorites(state);
   bindEvents(state);
@@ -1389,6 +1391,7 @@ function bindReportEvents(state) {
 }
 
 function bindNavigationEvents(state) {
+  window.addEventListener("hashchange", () => handleRouteChange(state));
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
     if (viewItem) {
@@ -1441,6 +1444,62 @@ function selectView(state, viewKey) {
   }
 
   activateStaticView(state, viewKey === "communication" ? "communication" : "start");
+}
+
+function parseLocationRoute() {
+  const token = window.location.hash.replace(/^#/, "").trim();
+  if (!token) return null;
+  if (token.startsWith("report=")) {
+    const reportKey = decodeURIComponent(token.slice("report=".length)).trim();
+    if (REPORTS_BY_KEY[reportKey]) return { type: "report", reportKey };
+    return null;
+  }
+  if (ROUTABLE_STATIC_VIEWS.has(token)) {
+    return { type: "view", viewKey: token };
+  }
+  return null;
+}
+
+function currentRouteHash(state) {
+  if (state.currentView === "report" && REPORTS_BY_KEY[state.currentReportKey]) {
+    return `#report=${encodeURIComponent(state.currentReportKey)}`;
+  }
+  if (ROUTABLE_STATIC_VIEWS.has(state.currentView)) {
+    return `#${state.currentView}`;
+  }
+  return "#start";
+}
+
+function syncLocationRoute(state) {
+  const nextHash = currentRouteHash(state);
+  if (window.location.hash === nextHash) return;
+  const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+  window.history.replaceState(null, "", nextUrl);
+}
+
+function applyRouteFromLocation(state) {
+  const route = parseLocationRoute();
+  if (!route) return;
+  if (route.type === "report") {
+    state.currentView = "report";
+    state.currentReportKey = route.reportKey;
+    state.expandedSidebarGroupId = getReportGroupId(route.reportKey);
+    restoreInteractiveReportState(state, route.reportKey);
+    return;
+  }
+  state.currentView = route.viewKey;
+}
+
+function handleRouteChange(state) {
+  const route = parseLocationRoute();
+  if (!route) return;
+  if (route.type === "report") {
+    if (state.currentView === "report" && state.currentReportKey === route.reportKey) return;
+    selectReport(state, route.reportKey);
+    return;
+  }
+  if (state.currentView === route.viewKey) return;
+  selectView(state, route.viewKey);
 }
 
 function clonePlainValue(value) {
@@ -1517,6 +1576,7 @@ function resetInteractiveReportState(state) {
 function activateReportView(state, { loadData = false } = {}) {
   state.currentView = "report";
   state.expandedSidebarGroupId = state.expandedSidebarGroupId || getReportGroupId(state.currentReportKey);
+  syncLocationRoute(state);
   renderSideMenu(state);
   renderCurrentView(state);
   renderActiveReport(state);
@@ -1526,6 +1586,7 @@ function activateReportView(state, { loadData = false } = {}) {
 
 function activateAdministrationView(state) {
   state.currentView = "administration";
+  syncLocationRoute(state);
   renderSideMenu(state);
   renderCurrentView(state);
   renderAdministration(state);
@@ -1534,6 +1595,7 @@ function activateAdministrationView(state) {
 
 function activateStaticView(state, viewKey) {
   state.currentView = viewKey;
+  syncLocationRoute(state);
   renderSideMenu(state);
   renderCurrentView(state);
   renderStartFavorites(state);
