@@ -32,6 +32,8 @@ def build_report_query(
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
         return _build_manual_entries_flagged_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    if report_key == "buildings":
+        return _build_buildings_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "construction-site-costs":
         return _build_construction_site_costs_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego zapytania SQL dla raportu: {report_key}")
@@ -1232,6 +1234,225 @@ ORDER BY n.DeN_DataDok DESC, n.DeN_DeNId DESC;
         notes=(
             "Raport 4.4: dokumenty z dekretem, ale bez schematu.",
             "Warunek: istnieje pozycja dekretu z kontem Wn/Ma oraz brak DeN_WzorzecId lub DeN_WzorzecTyp.",
+        ),
+    )
+
+
+def _build_buildings_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    where = _period_where("n.DeN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    time_condition = where.replace("WHERE ", "AND ", 1) if where else ""
+    sql = f"""
+SET NOCOUNT ON;
+WITH KnownSites AS (
+    SELECT DISTINCT
+        NULLIF(LTRIM(RTRIM(Acc_Numer)), '') AS KontoBudowy,
+        NULLIF(LTRIM(RTRIM(Acc_Nazwa)), '') AS Budowa,
+        UPPER(
+            REPLACE(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(NULLIF(LTRIM(RTRIM(Acc_Nazwa)), ''), ',', ' '),
+                            '.', ' '
+                        ),
+                        '/', ' '
+                    ),
+                    '-', ' '
+                ),
+                '  ',
+                ' '
+            )
+        ) AS BudowaKey
+    FROM CDN.Konta
+    WHERE Acc_Numer LIKE '500-150%'
+      AND NULLIF(LTRIM(RTRIM(Acc_Nazwa)), '') IS NOT NULL
+),
+CostBase AS (
+    SELECT
+        YEAR(n.DeN_DataDok) AS Rok,
+        MONTH(n.DeN_DataDok) AS MiesiacNr,
+        site.Budowa,
+        CAST(COALESCE(e.DeE_Kwota, 0) AS decimal(18, 2)) AS Kwota,
+        CASE
+            WHEN COALESCE(NULLIF(n.DeN_Dokument, ''), n.DeN_NumerPelny, '') LIKE 'E/%'
+              OR COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '') LIKE 'E/%'
+                THEN 'WYNAGRODZENIA'
+            WHEN UPPER(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '')) LIKE '%PODWYKONAW%'
+                THEN 'PODWYKONAWCY'
+            WHEN (wn.Acc_Numer LIKE '720-150%' AND ma.Acc_Numer LIKE '500-150%')
+              OR (wn.Acc_Numer LIKE '500-150%' AND ma.Acc_Numer LIKE '720-150%')
+              OR UPPER(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '')) LIKE '%PRZEKSIĘGOWANIE KOSZTÓW%'
+                THEN 'SP_ZOO'
+            WHEN UPPER(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '')) LIKE '%MATERIAŁ%'
+              OR UPPER(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '')) LIKE '%MATERIAL%'
+              OR UPPER(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), '')) LIKE '%BUDOWLAN%'
+                THEN 'MATERIAL'
+            ELSE 'MATERIAL'
+        END AS Typ
+    FROM CDN.DekretyElem AS e
+    JOIN CDN.DekretyNag AS n ON n.DeN_DeNId = e.DeE_DeNId
+    LEFT JOIN CDN.Konta AS wn ON wn.Acc_AccID = e.DeE_AccWnId
+    LEFT JOIN CDN.Konta AS ma ON ma.Acc_AccID = e.DeE_AccMaId
+    CROSS APPLY (
+        SELECT CASE
+            WHEN wn.Acc_Numer LIKE '500-150%' THEN NULLIF(LTRIM(RTRIM(wn.Acc_Nazwa)), '')
+            ELSE NULLIF(LTRIM(RTRIM(ma.Acc_Nazwa)), '')
+        END AS Budowa
+    ) AS site
+    WHERE (wn.Acc_Numer LIKE '500-150%' OR ma.Acc_Numer LIKE '500-150%')
+      AND NULLIF(LTRIM(RTRIM(COALESCE(site.Budowa, ''))), '') IS NOT NULL
+      AND COALESCE(e.DeE_Kwota, 0) > 0
+      {time_condition}
+),
+RevenueBase AS (
+    SELECT
+        YEAR(n.DeN_DataDok) AS Rok,
+        MONTH(n.DeN_DataDok) AS MiesiacNr,
+        COALESCE(mapped.Budowa, NULLIF(LTRIM(RTRIM(ma.Acc_Nazwa)), ''), N'Nieprzypisana budowa') AS Budowa,
+        CAST(COALESCE(e.DeE_Kwota, 0) AS decimal(18, 2)) AS Kwota
+    FROM CDN.DekretyElem AS e
+    JOIN CDN.DekretyNag AS n ON n.DeN_DeNId = e.DeE_DeNId
+    LEFT JOIN CDN.Konta AS wn ON wn.Acc_AccID = e.DeE_AccWnId
+    LEFT JOIN CDN.Konta AS ma ON ma.Acc_AccID = e.DeE_AccMaId
+    OUTER APPLY (
+        SELECT TOP (1)
+            ks.Budowa
+        FROM KnownSites AS ks
+        WHERE
+            UPPER(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), COALESCE(NULLIF(n.DeN_Dokument, ''), n.DeN_NumerPelny, '')), ',', ' '),
+                                '.',
+                                ' '
+                            ),
+                            '/',
+                            ' '
+                        ),
+                        '-',
+                        ' '
+                    ),
+                    '  ',
+                    ' '
+                )
+            ) LIKE '%' + ks.BudowaKey + '%'
+            OR ks.BudowaKey LIKE '%' + UPPER(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(COALESCE(NULLIF(ma.Acc_Nazwa, ''), NULLIF(wn.Acc_Nazwa, ''), ''), ',', ' '),
+                                '.',
+                                ' '
+                            ),
+                            '/',
+                            ' '
+                        ),
+                        '-',
+                        ' '
+                    ),
+                    '  ',
+                    ' '
+                )
+            ) + '%'
+        ORDER BY
+            CASE
+                WHEN UPPER(
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(COALESCE(NULLIF(e.DeE_Kategoria, ''), NULLIF(n.DeN_Kategoria, ''), COALESCE(NULLIF(n.DeN_Dokument, ''), n.DeN_NumerPelny, '')), ',', ' '),
+                                    '.',
+                                    ' '
+                                ),
+                                '/',
+                                ' '
+                            ),
+                            '-',
+                            ' '
+                        ),
+                        '  ',
+                        ' '
+                    )
+                ) LIKE '%' + ks.BudowaKey + '%' THEN 0 ELSE 1
+            END,
+            LEN(ks.BudowaKey) DESC
+    ) AS mapped
+    WHERE ma.Acc_Numer LIKE '730-150%'
+      AND COALESCE(e.DeE_Kwota, 0) > 0
+      {time_condition}
+),
+Summary AS (
+    SELECT
+        Budowa,
+        Rok,
+        MiesiacNr,
+        CAST(SUM(CASE WHEN Typ = 'PRZYCHODY' THEN Kwota ELSE 0 END) AS decimal(18, 2)) AS Przychody,
+        CAST(SUM(CASE WHEN Typ = 'PODWYKONAWCY' THEN Kwota ELSE 0 END) AS decimal(18, 2)) AS Podwykonawcy,
+        CAST(SUM(CASE WHEN Typ = 'SP_ZOO' THEN Kwota ELSE 0 END) AS decimal(18, 2)) AS SpZoo,
+        CAST(SUM(CASE WHEN Typ = 'MATERIAL' THEN Kwota ELSE 0 END) AS decimal(18, 2)) AS Material,
+        CAST(SUM(CASE WHEN Typ = 'WYNAGRODZENIA' THEN Kwota ELSE 0 END) AS decimal(18, 2)) AS Wynagrodzenia
+    FROM (
+        SELECT Rok, MiesiacNr, Budowa, 'PRZYCHODY' AS Typ, Kwota FROM RevenueBase
+        UNION ALL
+        SELECT Rok, MiesiacNr, Budowa, Typ, Kwota FROM CostBase
+    ) AS all_rows
+    GROUP BY Budowa, Rok, MiesiacNr
+)
+SELECT
+    Budowa AS [Budowa],
+    CAST(Rok AS varchar(4)) AS [Rok],
+    CASE MiesiacNr
+        WHEN 1 THEN N'Styczeń'
+        WHEN 2 THEN N'Luty'
+        WHEN 3 THEN N'Marzec'
+        WHEN 4 THEN N'Kwiecień'
+        WHEN 5 THEN N'Maj'
+        WHEN 6 THEN N'Czerwiec'
+        WHEN 7 THEN N'Lipiec'
+        WHEN 8 THEN N'Sierpień'
+        WHEN 9 THEN N'Wrzesień'
+        WHEN 10 THEN N'Październik'
+        WHEN 11 THEN N'Listopad'
+        WHEN 12 THEN N'Grudzień'
+    END AS [Miesiac],
+    LTRIM(STR(Przychody, 18, 2)) AS [Przychody],
+    LTRIM(STR(Podwykonawcy, 18, 2)) AS [Podwykonawcy],
+    LTRIM(STR(SpZoo, 18, 2)) AS [SP. z o.o.],
+    LTRIM(STR(Material, 18, 2)) AS [Materiał],
+    LTRIM(STR(Wynagrodzenia, 18, 2)) AS [Wynagrodzenia],
+    LTRIM(STR(Podwykonawcy + SpZoo + Material + Wynagrodzenia, 18, 2)) AS [Koszty razem],
+    LTRIM(STR(Przychody - (Podwykonawcy + SpZoo + Material + Wynagrodzenia), 18, 2)) AS [Zysk/Strata],
+    CASE WHEN Przychody > 0 OR Podwykonawcy > 0 OR SpZoo > 0 THEN '1' ELSE '0' END AS [__flag_przychody_podwykonawcy_i_koszty_wlasne_sp_z_o_o],
+    CASE WHEN Material > 0 OR Wynagrodzenia > 0 OR (Podwykonawcy + SpZoo + Material + Wynagrodzenia) > 0 THEN '1' ELSE '0' END AS [__flag_materialy_wynagrodzenia_i_koszty_razem],
+    CASE WHEN Przychody <> 0 OR (Podwykonawcy + SpZoo + Material + Wynagrodzenia) <> 0 THEN '1' ELSE '0' END AS [__flag_marza_budowy_i_zysk_strata_miesiecznie],
+    CASE WHEN Przychody = 0 AND (Podwykonawcy + SpZoo + Material + Wynagrodzenia) > 0 THEN '1' ELSE '0' END AS [__flag_budowa_bez_przychodu],
+    CASE WHEN (Podwykonawcy + SpZoo + Material + Wynagrodzenia) > Przychody AND Przychody > 0 THEN '1' ELSE '0' END AS [__flag_koszty_przewyzszaja_przychody],
+    CASE WHEN (Podwykonawcy + SpZoo + Material + Wynagrodzenia) > 0 AND Podwykonawcy / NULLIF(Podwykonawcy + SpZoo + Material + Wynagrodzenia, 0) >= 0.6 THEN '1' ELSE '0' END AS [__flag_wysoki_udzial_podwykonawcow]
+FROM Summary
+WHERE Przychody <> 0
+   OR Podwykonawcy <> 0
+   OR SpZoo <> 0
+   OR Material <> 0
+   OR Wynagrodzenia <> 0
+ORDER BY Rok DESC, MiesiacNr DESC, Budowa;
+""".strip()
+    return OptimaReportQuery(
+        report_key="buildings",
+        sql=sql,
+        notes=(
+            "Raport Budowy pokazuje miesięczne podsumowanie przychodów i kosztów dla budów powiązanych z kontami 500-150.",
+            "Przychody są pobierane z dekretów przychodowych 730-150 i mapowane do budów po nazwie konta lub treści kategorii dokumentu.",
+            "Koszty są dzielone na podwykonawców, sp. z o.o., materiał i wynagrodzenia według kategorii dokumentu oraz przeksięgowań 720-150/500-150.",
         ),
     )
 

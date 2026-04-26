@@ -906,6 +906,27 @@ const REPORT_GROUPS = [
     title: "Projekty / MPK / B+R",
     reports: [
       {
+        key: "buildings",
+        title: "Budowy",
+        section: "Projekty / MPK / B+R",
+        summary: "Miesięczne podsumowanie budów: przychody, podwykonawcy, koszty własne sp. z o.o., materiał, wynagrodzenia, koszty razem i zysk/strata.",
+        question: "Które budowy zarabiają, które generują koszty i jak wygląda marża miesiąc do miesiąca?",
+        priority: "Wysoki",
+        queryKey: "buildings",
+        sources: ["Optima", "Księga"],
+        filters: ["Okres od-do", "Budowa", "Rok", "Miesiac", "Kwota od-do"],
+        tags: ["budowy", "marża", "przychody", "koszty"],
+        primaryModule: "LEDGER",
+        relatedModules: ["LEDGER", "ACCOUNT_PLAN"],
+        controls: [
+          "Przychody, podwykonawcy i koszty własne sp. z o.o.",
+          "Materiały, wynagrodzenia i koszty razem.",
+          "Marża budowy i zysk/strata miesięcznie.",
+        ],
+        layout: ["Budowa", "Rok", "Miesiac", "Przychody", "Podwykonawcy", "SP. z o.o.", "Materiał", "Wynagrodzenia", "Koszty razem", "Zysk/Strata"],
+        alerts: ["Budowa bez przychodu.", "Koszty przewyższają przychody.", "Wysoki udział podwykonawców."],
+      },
+      {
         key: "construction-site-costs",
         title: "Koszty i dokumenty według budów 500-150",
         section: "Projekty / MPK / B+R",
@@ -1083,6 +1104,18 @@ const SIMPLE_STACK_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const SELECTION_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTERS = {
+  buildings: [
+    { header: "Budowa", filter: "Budowa", type: "select", emptyLabel: "Wszystkie budowy", headers: ["Budowa"] },
+    { header: "Rok", filter: "Rok", type: "select", emptyLabel: "Wszystkie lata", headers: ["Rok"] },
+    { header: "Miesiac", filter: "Miesiac", type: "select", emptyLabel: "Wszystkie miesiące", headers: ["Miesiac"] },
+    { header: "Przychody", filter: "Przychody", type: "number-condition", headers: ["Przychody"] },
+    { header: "Podwykonawcy", filter: "Podwykonawcy", type: "number-condition", headers: ["Podwykonawcy"] },
+    { header: "SP. z o.o.", filter: "SP. z o.o.", type: "number-condition", headers: ["SP. z o.o."] },
+    { header: "Materiał", filter: "Materiał", type: "number-condition", headers: ["Materiał"] },
+    { header: "Wynagrodzenia", filter: "Wynagrodzenia", type: "number-condition", headers: ["Wynagrodzenia"] },
+    { header: "Koszty razem", filter: "Koszty razem", type: "number-condition", headers: ["Koszty razem"] },
+    { header: "Zysk/Strata", filter: "Zysk/Strata", type: "number-condition", headers: ["Zysk/Strata"] },
+  ],
   "documents-without-scheme": [
     { header: "Numer dokumentu", filter: "Numer dokumentu", type: "text", placeholder: "Szukaj", headers: ["Numer dokumentu"] },
     { header: "Numer obcy", filter: "Numer obcy", type: "text", placeholder: "Szukaj", headers: ["Numer obcy"] },

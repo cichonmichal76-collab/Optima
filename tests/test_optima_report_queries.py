@@ -344,3 +344,50 @@ def test_report_data_uses_explicit_manual_entries_query(monkeypatch):
     assert payload["rows"] == [{"Numer": "E/2026/03", "__flag_dekrety_reczne_na_istotne_kwoty": "1"}]
     assert payload["source"]["source_type"] == "report"
     assert payload["source"]["report"] == "manual-entries"
+
+
+def test_buildings_report_exposes_monthly_margin_columns():
+    query = build_report_query("buildings", "202603")
+
+    assert "KnownSites AS (" in query.sql
+    assert "RevenueBase AS (" in query.sql
+    assert "CostBase AS (" in query.sql
+    assert "730-150%" in query.sql
+    assert "500-150%" in query.sql
+    assert "[Przychody]" in query.sql
+    assert "[Podwykonawcy]" in query.sql
+    assert "[SP. z o.o.]" in query.sql
+    assert "[Materiał]" in query.sql
+    assert "[Wynagrodzenia]" in query.sql
+    assert "[Koszty razem]" in query.sql
+    assert "[Zysk/Strata]" in query.sql
+    assert "[__flag_budowa_bez_przychodu]" in query.sql
+    assert "[__flag_koszty_przewyzszaja_przychody]" in query.sql
+    assert "[__flag_wysoki_udzial_podwykonawcow]" in query.sql
+    assert "n.DeN_DataDok >= '2026-03-01'" in query.sql
+    assert "n.DeN_DataDok < '2026-04-01'" in query.sql
+    assert query.notes
+
+
+def test_report_data_uses_explicit_buildings_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "RevenueBase AS (" in sql
+        assert "[Zysk/Strata]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Budowa", "Rok", "Miesiac", "Przychody"], [{"Budowa": "INDUSTRY,ORZESZE", "Rok": "2026", "Miesiac": "Marzec", "Przychody": "190600.00"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "buildings",
+            "report_title": "Budowy",
+            "module": "LEDGER",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Budowa": "INDUSTRY,ORZESZE", "Rok": "2026", "Miesiac": "Marzec", "Przychody": "190600.00"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "buildings"
