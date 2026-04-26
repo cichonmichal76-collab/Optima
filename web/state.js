@@ -14,7 +14,7 @@ export function createInitialState() {
     reportDataKey: "",
     reportDataError: "",
     reportChartEnabled: false,
-    reportCustomizeOpen: false,
+    reportToolbarMenuOpen: "",
     reportFilterValues: {},
     reportControlSelections: {},
     reportAlertSelections: {},

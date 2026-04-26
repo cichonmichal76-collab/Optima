@@ -4,8 +4,8 @@ from PySide6.QtWidgets import QComboBox, QDialog, QLabel, QPushButton, QTextEdit
 
 from src.schema_generator.optima_xml_template_generator import OptimaXmlTemplateGenerator
 from src.schema_generator.rules_engine import SchemaRulesEngine
-from src.schema_generator.template_library import TemplateLibrary
 from src.schema_generator.schema_validator import SchemaValidator
+from src.schema_generator.template_library import TemplateLibrary
 
 
 class SchemaWizard(QDialog):
@@ -19,7 +19,7 @@ class SchemaWizard(QDialog):
         self.xml_generator = OptimaXmlTemplateGenerator()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Wybierz wzorzec schematu ksiÄgowego."))
+        layout.addWidget(QLabel("Wybierz wzorzec schematu księgowego."))
 
         self.template_combo = QComboBox()
         for item in self.template_library.list_templates():
@@ -50,7 +50,6 @@ class SchemaWizard(QDialog):
         for issue in issues:
             text.append(f"- {issue.level}: {issue.issue}")
         text.append("")
-        text.append("PodglÄd XML:")
+        text.append("Podgląd XML:")
         text.append(preview_xml)
         self.output.setPlainText("\n".join(text))
-

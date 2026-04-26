@@ -42,8 +42,8 @@ class OptimaSchemaXmlConnector(BaseConnector):
                     area="SCHEMA_XML",
                     source_file=str(file_path),
                     issue_code="SCHEMA_POSITIONS_MISSING",
-                    issue="Nie znaleziono elementÃ³w pozycji schematu.",
-                    recommendation="Zweryfikuj, czy eksportowany XML pochodzi ze schematu ksiÄgowego Optimy.",
+                    issue="Nie znaleziono elementów pozycji schematu.",
+                    recommendation="Zweryfikuj, czy eksportowany XML pochodzi ze schematu księgowego Optimy.",
                     confidence=0.8,
                 )
             )
@@ -55,7 +55,7 @@ class OptimaSchemaXmlConnector(BaseConnector):
                     source_file=str(file_path),
                     issue_code="SCHEMA_ACCOUNT_MISSING",
                     issue="Nie znaleziono definicji kont w XML.",
-                    recommendation="Zweryfikuj struktur? XML i uzupe?nij walidacj? na bazie eksportu wzorcowego.",
+                    recommendation="Zweryfikuj strukturę XML i uzupełnij walidację na bazie eksportu wzorcowego.",
                     confidence=0.75,
                 )
             )
@@ -71,4 +71,3 @@ class OptimaSchemaXmlConnector(BaseConnector):
     @staticmethod
     def _local_name(tag: str) -> str:
         return tag.split("}", 1)[-1]
-

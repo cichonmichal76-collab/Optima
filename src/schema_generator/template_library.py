@@ -9,46 +9,46 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     "FZ_VAT_100": {
         "name": "FZ koszt VAT 100%",
         "condition": "document_type == 'FZ'",
-        "warnings": ["Przetestuj projekt schematu w bazie DEMO przed wdroÅ¼eniem."],
+        "warnings": ["Przetestuj projekt schematu w bazie DEMO przed wdrożeniem."],
         "lines": [
             {"side": "WN", "account": "{{cost_account}}", "amount_expression": "net", "description": "Koszt netto"},
             {"side": "WN", "account": "{{vat_account}}", "amount_expression": "vat", "description": "VAT naliczony"},
-            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawc?"},
+            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawcą"},
         ],
     },
     "FZ_PALIWO_50": {
         "name": "FZ paliwo VAT 50%",
         "condition": "document_type == 'FZ' and category == 'PALIWO'",
-        "warnings": ["Zweryfikuj podzia? VAT odliczonego i nieodliczonego."],
+        "warnings": ["Zweryfikuj podział VAT odliczonego i nieodliczonego."],
         "lines": [
             {"side": "WN", "account": "{{fuel_account}}", "amount_expression": "net + vat_nondeductible", "description": "Koszt paliwa"},
             {"side": "WN", "account": "{{vat_account}}", "amount_expression": "vat_deductible", "description": "VAT odliczalny"},
-            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawc?"},
+            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawcą"},
         ],
     },
     "FZ_BEZ_VAT": {
         "name": "FZ bez VAT",
         "condition": "document_type == 'FZ' and vat == 0",
-        "warnings": ["Zweryfikuj podstaw? zwolnienia lub NP."],
+        "warnings": ["Zweryfikuj podstawę zwolnienia lub NP."],
         "lines": [
             {"side": "WN", "account": "{{cost_account}}", "amount_expression": "gross", "description": "Koszt brutto"},
-            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawc?"},
+            {"side": "MA", "account": "{{supplier_account}}", "amount_expression": "gross", "description": "Rozrachunek z dostawcą"},
         ],
     },
     "FS_23": {
-        "name": "FS sprzeda? krajowa 23%",
+        "name": "FS sprzedaż krajowa 23%",
         "condition": "document_type == 'FS' and vat_rate == '23%'",
-        "warnings": ["Zweryfikuj konta przychodowe oraz konto VAT naleÅ¼nego."],
+        "warnings": ["Zweryfikuj konta przychodowe oraz konto VAT należnego."],
         "lines": [
-            {"side": "WN", "account": "{{customer_account}}", "amount_expression": "gross", "description": "Nale?no?? od odbiorcy"},
-            {"side": "MA", "account": "{{revenue_account}}", "amount_expression": "net", "description": "PrzychÃ³d"},
-            {"side": "MA", "account": "{{vat_due_account}}", "amount_expression": "vat", "description": "VAT naleÅ¼ny"},
+            {"side": "WN", "account": "{{customer_account}}", "amount_expression": "gross", "description": "Należność od odbiorcy"},
+            {"side": "MA", "account": "{{revenue_account}}", "amount_expression": "net", "description": "Przychód"},
+            {"side": "MA", "account": "{{vat_due_account}}", "amount_expression": "vat", "description": "VAT należny"},
         ],
     },
     "WB_BANK_FEE": {
-        "name": "WB opÅata bankowa",
+        "name": "WB opłata bankowa",
         "condition": "document_type == 'WB' and kind == 'BANK_FEE'",
-        "warnings": ["Zweryfikuj konto kosztÃ³w finansowych."],
+        "warnings": ["Zweryfikuj konto kosztów finansowych."],
         "lines": [
             {"side": "WN", "account": "{{financial_cost_account}}", "amount_expression": "amount", "description": "Koszt bankowy"},
             {"side": "MA", "account": "{{bank_account}}", "amount_expression": "amount", "description": "Rachunek bankowy"},
@@ -64,12 +64,12 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         ],
     },
     "LP": {
-        "name": "LP lista pÅac podstawowa",
+        "name": "LP lista płac podstawowa",
         "condition": "document_type == 'LP'",
-        "warnings": ["Zweryfikuj konta wynagrodzeÅ, ZUS i podatku."],
+        "warnings": ["Zweryfikuj konta wynagrodzeń, ZUS i podatku."],
         "lines": [
-            {"side": "WN", "account": "{{salary_cost_account}}", "amount_expression": "gross_salary", "description": "Koszt wynagrodzeÅ"},
-            {"side": "MA", "account": "{{employee_liability_account}}", "amount_expression": "net_salary", "description": "WypÅata netto"},
+            {"side": "WN", "account": "{{salary_cost_account}}", "amount_expression": "gross_salary", "description": "Koszt wynagrodzeń"},
+            {"side": "MA", "account": "{{employee_liability_account}}", "amount_expression": "net_salary", "description": "Wypłata netto"},
             {"side": "MA", "account": "{{tax_liability_account}}", "amount_expression": "tax", "description": "Podatek"},
             {"side": "MA", "account": "{{social_security_account}}", "amount_expression": "social_security", "description": "ZUS"},
         ],
@@ -95,4 +95,3 @@ class TemplateLibrary:
         if template_id not in templates:
             raise KeyError(f"Nieznany template: {template_id}")
         return templates[template_id]
-

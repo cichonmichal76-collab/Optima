@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -201,6 +205,16 @@ input[type="date"] {
   font-size: 13px;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.file-meta.is-success {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.file-meta.is-error {
+  color: var(--red);
+  font-weight: 600;
 }
 
 .plain-button,
@@ -472,7 +486,7 @@ input[type="date"] {
   color: #56645f;
 }
 
-.topbar-db.is-disconnected #connectedDatabaseName {
+.topbar-db:not(.is-connected) #connectedDatabaseName {
   color: var(--red);
 }
 
@@ -632,6 +646,92 @@ input[type="date"] {
 .connection-form label {
   grid-column: 1 / -1;
   color: var(--muted);
+}
+
+.connection-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.connection-step {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 14px;
+  border: 1px solid rgba(23, 107, 91, 0.14);
+  border-radius: 999px;
+  background: #edf6f2;
+  color: #21443b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.connection-status {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 16px 18px;
+  border: 1px solid rgba(23, 107, 91, 0.14);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f7faf8 0%, #f1f6f3 100%);
+}
+
+.connection-status.is-loading {
+  border-color: rgba(35, 87, 137, 0.22);
+  background: linear-gradient(180deg, #f6f9fc 0%, #edf4fa 100%);
+}
+
+.connection-status.is-success {
+  border-color: rgba(23, 107, 91, 0.24);
+  background: linear-gradient(180deg, #f3fbf7 0%, #ebf6f1 100%);
+}
+
+.connection-status.is-error {
+  border-color: rgba(180, 35, 24, 0.22);
+  background: linear-gradient(180deg, #fff8f7 0%, #fdf0ee 100%);
+}
+
+.connection-status-title {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.connection-status-text {
+  color: #41514b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.connection-status-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-status-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding-top: 8px;
+  border-top: 1px solid rgba(23, 107, 91, 0.08);
+}
+
+.connection-status-label {
+  color: #556560;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.connection-status-value {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .administration-view {
@@ -794,6 +894,10 @@ input[type="date"] {
   gap: 10px;
 }
 
+.report-actions-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .report-actions-grid .plain-button.is-active {
   border-color: rgba(23, 107, 91, 0.35);
   background: var(--accent-soft);
@@ -901,8 +1005,16 @@ input[type="date"] {
 }
 
 .report-hero-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
   align-items: start;
   margin-bottom: 16px;
+}
+
+.report-hero-head > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .report-title-row {
@@ -953,30 +1065,93 @@ input[type="date"] {
   color: var(--muted);
 }
 
-.report-priority {
-  align-self: start;
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: #fff5ea;
-  color: #8a4d0f;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: capitalize;
+.report-toolbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
-.report-priority[data-priority="krytyczny"] {
-  background: #fde9e7;
-  color: var(--red);
+.report-toolbar-menu {
+  position: relative;
 }
 
-.report-priority[data-priority="wysoki"] {
-  background: #fff5ea;
-  color: var(--amber);
+.report-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(23, 107, 91, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #315148;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.report-toolbar-button:hover {
+  border-color: rgba(23, 107, 91, 0.42);
+  color: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.report-toolbar-button.is-active {
+  border-color: rgba(23, 107, 91, 0.45);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.report-toolbar-button span {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.report-toolbar-button-sql span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.report-toolbar-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  width: min(420px, calc(100vw - 80px));
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(23, 107, 91, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 36px rgba(23, 32, 28, 0.12);
+}
+
+.report-toolbar-popover[hidden] {
+  display: none;
+}
+
+.report-toolbar-popover-wide {
+  width: min(620px, calc(100vw - 80px));
+}
+
+.report-toolbar-popover-head {
+  display: grid;
+  gap: 4px;
+}
+
+.report-toolbar-popover-head h4 {
+  margin: 0;
+  font-size: 16px;
 }
 
 .report-meta-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -1027,6 +1202,16 @@ input[type="date"] {
 
 .report-filter-field-range span {
   align-self: center;
+}
+
+@media (max-width: 1100px) {
+  .report-hero-head {
+    flex-direction: column;
+  }
+
+  .report-toolbar {
+    justify-content: flex-start;
+  }
 }
 
 .report-filter-field-multiselect {
@@ -1374,6 +1559,32 @@ th {
   background: #edf5f1;
   color: #20342d;
   font-size: 13px;
+}
+
+.report-header-filter-row th {
+  padding: 8px 10px;
+  background: #f8fbf9;
+  border-bottom: 1px solid var(--line);
+}
+
+.report-header-filter-cell.is-empty {
+  background: #f8fbf9;
+}
+
+.report-header-filter-field {
+  display: block;
+  width: 100%;
+}
+
+.report-header-filter-control {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(23, 107, 91, 0.16);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
 }
 
 td {

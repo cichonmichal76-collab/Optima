@@ -30,7 +30,7 @@ class JpkXmlConnector(BaseConnector):
             detected_format=FormatKind.XML,
             headers=headers,
             preview_rows=rows[:20],
-            notes=["Minimalny podgl?d JPK/XML z obs?ug? namespace."],
+            notes=["Minimalny podgląd JPK/XML z obsługą namespace."],
             xml_root=self._local_name(root.tag),
             namespaces=namespaces,
         )
@@ -97,4 +97,3 @@ class JpkXmlConnector(BaseConnector):
         if hasattr(root, "nsmap") and root.nsmap:
             return {key or "default": value for key, value in root.nsmap.items() if value}
         return {}
-

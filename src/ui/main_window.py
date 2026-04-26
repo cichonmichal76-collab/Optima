@@ -19,13 +19,13 @@ from src.core.enums import DataKind
 from src.export.report_html import HtmlReportExporter
 from src.export.report_json import JsonReportExporter
 from src.export.report_xlsx import XlsxReportExporter
+from src.storage.settings_store import SettingsStore
 from src.ui.audit_dashboard import AuditDashboard
 from src.ui.audit_results_table import AuditResultsTable
 from src.ui.import_wizard import ImportWizard
 from src.ui.report_viewer import ReportViewer
 from src.ui.schema_wizard import SchemaWizard
 from src.ui.settings_window import SettingsWindow
-from src.storage.settings_store import SettingsStore
 
 
 class MainWindow(QMainWindow):
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         new_audit_button.clicked.connect(self._start_audit)
         schema_button = QPushButton("Generator schematu")
         schema_button.clicked.connect(self._open_schema_wizard)
-        open_button = QPushButton("OtwÃ³rz zapisany audyt")
+        open_button = QPushButton("Otwórz zapisany audyt")
         open_button.clicked.connect(self._open_saved_report)
         settings_button = QPushButton("Ustawienia")
         settings_button.clicked.connect(self._open_settings)
@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         elif import_result.data_kind == DataKind.JPK_XML:
             result = self.audit_engine.run(jpk_records=import_result.records, options=settings)
         else:
-            QMessageBox.information(self, "Import", "Plik zosta? za?adowany do podgl?du technicznego.")
+            QMessageBox.information(self, "Import", "Plik został załadowany do podglądu technicznego.")
             return
 
         self.current_result = result
@@ -133,5 +133,4 @@ class MainWindow(QMainWindow):
             HtmlReportExporter().export(self.current_result, path.with_suffix(".html"))
         else:
             XlsxReportExporter().export(self.current_result, path.with_suffix(".xlsx"))
-        QMessageBox.information(self, "Eksport", "Raport zosta? zapisany.")
-
+        QMessageBox.information(self, "Eksport", "Raport został zapisany.")

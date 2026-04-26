@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Optima SQL GUI</title>
-  <link rel="stylesheet" href="web/styles.css?v=20260426-topbar-status">
+  <link rel="stylesheet" href="web/styles.css?v=20260426-without-scheme-headers">
 </head>
 <body>
   <div class="app-shell">
@@ -22,7 +22,7 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div class="topbar-db">
+        <div class="topbar-db is-disconnected">
           <span class="eyebrow">Podłączona baza</span>
           <h2 id="connectedDatabaseName">Brak podłączonej bazy</h2>
           <p id="viewSubtitle">Wgraj backup, podłącz bazę i wybierz raport, który ma odpowiedzieć, co blokuje zamknięcie miesiąca.</p>
@@ -90,23 +90,31 @@
                 <span class="eyebrow">Komunikacja</span>
                 <h3 id="communicationTitle">Podłączanie bazy SQL</h3>
               </div>
-              <span class="muted">read-only</span>
+              <span class="muted">Lokalna kopia · tylko do odczytu</span>
             </div>
             <p class="disclaimer">
-              Kliknij „Wgraj plik”, wybierz backup .BAK/.BAC z Eksploratora Windows, a potem „Podłącz”.
-              Program odtwarza lokalną kopię read-only bez zapisu do Optimy.
+              Pracujesz na lokalnej kopii bazy w trybie tylko do odczytu.
+              Program nie zapisuje żadnych zmian do Optimy.
             </p>
+            <div class="connection-steps" aria-label="Kroki podłączenia bazy">
+              <span class="connection-step">1. Wgraj plik</span>
+              <span class="connection-step">2. Sprawdź wybrany backup</span>
+              <span class="connection-step">3. Podłącz bazę</span>
+            </div>
             <div class="connection-form">
               <label for="backupPathDisplay">Plik backupu</label>
-              <input id="backupPathDisplay" type="text" value="" placeholder="Kliknij „Wgraj plik” i wybierz backup .BAK/.BAC" aria-label="Wybrany plik backupu SQL" readonly>
+              <input id="backupPathDisplay" type="text" value="" placeholder="Kliknij „Wgraj plik”, aby wskazać backup .BAK lub .BAC" aria-label="Wybrany plik backupu SQL" readonly>
               <input id="backupPath" type="hidden">
               <input id="sqlServer" type="hidden" value=".\SQLEXPRESS02">
               <input id="sqlDatabase" type="hidden" value="">
               <button id="scanBackups" class="plain-button" type="button">Wgraj plik</button>
               <button id="connectBackup" class="primary-button" type="button" disabled>Podłącz</button>
             </div>
-            <div class="file-meta" id="backupMeta">Status: wybierz plik .BAK/.BAC.</div>
-            <div id="backupInfo" class="connection-status">Status: oczekuję na wybór pliku backupu.</div>
+            <div class="file-meta" id="backupMeta">Nie wybrano jeszcze pliku backupu.</div>
+            <div id="backupInfo" class="connection-status is-idle">
+              <div class="connection-status-title">Gotowe do rozpoczęcia</div>
+              <div class="connection-status-text">Kliknij „Wgraj plik”, aby wskazać backup i przejść do podłączenia lokalnej kopii bazy.</div>
+            </div>
           </section>
 
           <section class="panel">
@@ -293,18 +301,81 @@
                 </div>
                 <p class="report-summary" id="reportSummary">Pierwszy raport po imporcie, który pokazuje kompletność paczki, liczbę dokumentów, błędy oraz gotowość do zamknięcia miesiąca.</p>
               </div>
-              <div class="report-priority" id="reportPriority">Priorytet: krytyczny</div>
+              <div class="report-toolbar" aria-label="Narzędzia raportu">
+                <div class="report-toolbar-menu">
+                  <button
+                    id="toggleReportExportMenu"
+                    class="report-toolbar-button"
+                    type="button"
+                    aria-expanded="false"
+                    aria-haspopup="true"
+                    aria-label="Eksport i wykres raportu"
+                    title="Eksport i wykres"
+                  >
+                    <span aria-hidden="true">⇩</span>
+                  </button>
+                  <div id="reportExportMenu" class="report-toolbar-popover" hidden>
+                    <div class="report-toolbar-popover-head">
+                      <h4>Akcje raportu</h4>
+                      <span id="reportActionMeta" class="muted">SQL, wykresy i eksport dla aktywnego raportu.</span>
+                    </div>
+                    <div class="report-actions-grid report-actions-grid-compact">
+                      <button id="toggleReportChart" class="plain-button" type="button">Włącz wykres</button>
+                      <button id="exportExcelTable" class="plain-button" type="button">Excel: tabela</button>
+                      <button id="exportExcelChart" class="plain-button" type="button">Excel: tabela + wykres</button>
+                      <button id="exportPdfTable" class="plain-button" type="button">PDF: tabela</button>
+                      <button id="exportPdfChart" class="plain-button" type="button">PDF: tabela + wykres</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="report-toolbar-menu">
+                  <button
+                    id="toggleReportCustomizeMenu"
+                    class="report-toolbar-button"
+                    type="button"
+                    aria-expanded="false"
+                    aria-haspopup="true"
+                    aria-label="Dostosuj raport"
+                    title="Dostosuj raport"
+                  >
+                    <span aria-hidden="true">▦</span>
+                  </button>
+                  <div id="reportCustomizeMenu" class="report-toolbar-popover" hidden>
+                    <div class="report-toolbar-popover-head">
+                      <h4>Dostosuj raport</h4>
+                      <span class="muted">Układ raportu: kolumny, widoczność i kolejność</span>
+                    </div>
+                    <div class="stack-list" id="reportLayoutList"></div>
+                  </div>
+                </div>
+
+                <div class="report-toolbar-menu">
+                  <button
+                    id="toggleReportOptimaMenu"
+                    class="report-toolbar-button report-toolbar-button-sql"
+                    type="button"
+                    aria-expanded="false"
+                    aria-haspopup="true"
+                    aria-label="Filtr do Optimy"
+                    title="Filtr do Optimy"
+                  >
+                    <span aria-hidden="true">SQL</span>
+                  </button>
+                  <div id="reportOptimaMenu" class="report-toolbar-popover report-toolbar-popover-wide" hidden>
+                    <div class="report-toolbar-popover-head">
+                      <h4>Filtr do Optimy</h4>
+                      <span id="reportOptimaMeta" class="muted">Po załadowaniu wyników wygenerujemy gotowy warunek do filtra zaawansowanego Optimy.</span>
+                    </div>
+                    <div id="reportOptimaContent" class="optima-filter-grid">
+                      <div class="available-card is-empty">Najpierw załaduj wyniki raportu.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           <div class="report-meta-grid">
-            <div class="report-meta-card">
-              <span class="meta-label">Pytanie biznesowe</span>
-              <strong id="reportQuestion">Czy paczka jest gotowa do pracy i co dokładnie blokuje zamknięcie miesiąca?</strong>
-            </div>
-            <div class="report-meta-card">
-              <span class="meta-label">Źródła danych</span>
-              <strong id="reportSources">Optima, KSeF, bank, OCR, Excel</strong>
-            </div>
-            <div class="report-meta-card report-filter-card">
+            <div id="reportFilterCard" class="report-meta-card report-filter-card">
               <span class="meta-label">Filtry raportu</span>
               <div id="reportFilters" class="report-filter-controls">
                 <div id="reportFilterFields" class="report-filter-grid"></div>
@@ -317,36 +388,6 @@
             </div>
           </div>
           <div class="tag-row" id="reportTags"></div>
-        </section>
-
-        <section class="metrics-grid" id="reportMetrics"></section>
-
-        <section class="panel report-actions-panel">
-          <div class="panel-head">
-            <div>
-              <h3>Akcje raportu</h3>
-              <span id="reportActionMeta" class="muted">SQL, wykresy i eksport dla aktywnego raportu.</span>
-            </div>
-          </div>
-          <div class="report-actions-grid">
-            <button id="toggleReportChart" class="plain-button" type="button">Włącz wykres</button>
-            <button id="exportExcelTable" class="plain-button" type="button">Excel: tabela</button>
-            <button id="exportExcelChart" class="plain-button" type="button">Excel: tabela + wykres</button>
-            <button id="exportPdfTable" class="plain-button" type="button">PDF: tabela</button>
-            <button id="exportPdfChart" class="plain-button" type="button">PDF: tabela + wykres</button>
-          </div>
-        </section>
-
-        <section class="panel report-optima-panel">
-          <div class="panel-head">
-            <div>
-              <h3>Filtr do Optimy</h3>
-              <span id="reportOptimaMeta" class="muted">Po załadowaniu wyników wygenerujemy gotowy warunek do filtra zaawansowanego Optimy.</span>
-            </div>
-          </div>
-          <div id="reportOptimaContent" class="optima-filter-grid">
-            <div class="available-card is-empty">Najpierw załaduj wyniki raportu.</div>
-          </div>
         </section>
 
         <section id="reportChartPanel" class="panel report-chart-panel" hidden>
@@ -368,7 +409,6 @@
               <span class="muted" id="reportDataMeta">Wybierz raport z podpiętym zapytaniem SQL.</span>
             </div>
             <div class="panel-head-actions">
-              <button id="toggleReportCustomize" class="plain-button" type="button" aria-expanded="false">Dostosuj</button>
               <button id="refreshReportData" class="plain-button" type="button">Odśwież wyniki</button>
             </div>
           </div>
@@ -380,16 +420,6 @@
               </tbody>
             </table>
           </div>
-        </section>
-
-        <section id="reportCustomizePanel" class="panel report-customize-panel" hidden>
-          <div class="panel-head">
-            <div>
-              <h3>Dostosuj raport</h3>
-              <span class="muted">Układ raportu: kolumny, widoczność i kolejność</span>
-            </div>
-          </div>
-          <div class="stack-list" id="reportLayoutList"></div>
         </section>
 
         <div class="report-layout">
@@ -415,7 +445,7 @@
     </main>
   </div>
 
-  <script type="module" src="web/app.js?v=20260426-topbar-status"></script>
+  <script type="module" src="web/app.js?v=20260426-without-scheme-headers"></script>
 </body>
 </html>
 

@@ -1028,6 +1028,15 @@ const REPORT_GROUPS_BY_ID = Object.fromEntries(REPORT_GROUPS.map((group) => [gro
 const SIDEBAR_GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
 const DATABASE_STORAGE_KEY = "optimaAudit.connectedDatabase";
 const FAVORITES_STORAGE_KEY = "optimaAudit.favoriteReports";
+const EMBEDDED_HEADER_FILTER_REPORTS = new Set(["documents-without-scheme"]);
+const EMBEDDED_HEADER_FILTERS = {
+  "documents-without-scheme": [
+    { header: "Typ dokumentu", filter: "Typ dokumentu", type: "select", emptyLabel: "Wszystkie typy" },
+    { header: "Kontrahent", filter: "Kontrahent", type: "text", placeholder: "Filtruj" },
+    { header: "Kategoria", filter: "Kategoria", type: "text", placeholder: "Filtruj" },
+    { header: "Powód braku schematu", filter: "Powód braku schematu", type: "select", emptyLabel: "Wszystkie powody" },
+  ],
+};
 
 function selectedAdminProfile() {
   const code = $("#adminValidationKind")?.value || ADMIN_EXPORT_PROFILES[0]?.code || "";
@@ -1035,6 +1044,14 @@ function selectedAdminProfile() {
 }
 
 function adminValidationScopeText() {
+  const sqlProfiles = ADMIN_EXPORT_PROFILES
+    .filter((profile) => profile.support === "sql")
+    .map((profile) => profile.label)
+    .join(", ");
+  const previewProfiles = ADMIN_EXPORT_PROFILES
+    .filter((profile) => profile.support !== "sql")
+    .map((profile) => profile.label)
+    .join(", ");
   return `Lista oparta na dokumentacji Optimy. Pełna walidacja SQL: ${sqlProfiles}. Parser / podgląd: ${previewProfiles}.`;
 }
 
@@ -1119,8 +1136,19 @@ function bindAdministrationEvents(state) {
 
 function bindReportEvents(state) {
   $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
-  $("#toggleReportCustomize").addEventListener("click", () => toggleReportCustomize(state));
   $("#toggleFavoriteReport").addEventListener("click", () => toggleFavoriteReport(state));
+  $("#toggleReportExportMenu").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleReportToolbarMenu(state, "export");
+  });
+  $("#toggleReportCustomizeMenu").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleReportToolbarMenu(state, "customize");
+  });
+  $("#toggleReportOptimaMenu").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleReportToolbarMenu(state, "sql");
+  });
   $("#toggleReportChart").addEventListener("click", () => toggleReportChart(state));
   $("#exportExcelTable").addEventListener("click", () => exportActiveReport(state, "xlsx", false));
   $("#exportExcelChart").addEventListener("click", () => exportActiveReport(state, "xlsx", true));
@@ -1155,10 +1183,27 @@ function bindReportEvents(state) {
     if (!moveButton) return;
     moveReportColumn(state, moveButton.dataset.layoutTarget, moveButton.dataset.layoutMove);
   });
+  $("#reportDataHead").addEventListener("change", (event) => {
+    if (!event.target.closest("[data-report-filter]")) return;
+    applyReportSpecificFilters(state);
+  });
+  $("#reportDataHead").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !event.target.closest("[data-report-filter]")) return;
+    event.preventDefault();
+    applyReportSpecificFilters(state);
+  });
   $("#reportOptimaContent").addEventListener("click", (event) => {
     const copyButton = event.target.closest("[data-copy-optima]");
     if (!copyButton) return;
     copyOptimaExpression(copyButton);
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".report-toolbar")) return;
+    closeReportToolbarMenus(state);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeReportToolbarMenus(state);
   });
 }
 
@@ -1238,7 +1283,7 @@ function resetInteractiveReportState(state) {
   state.reportAlertSelections = {};
   state.reportColumnOrder = [];
   state.reportHiddenColumns = {};
-  state.reportCustomizeOpen = false;
+  state.reportToolbarMenuOpen = "";
   clearOptimaFilterState(state);
 }
 
@@ -1287,8 +1332,16 @@ async function ensureDatabaseAvailable(state) {
 
   $("#sqlDatabase").value = detectedDatabase;
   persistDatabase(detectedDatabase);
-  $("#backupMeta").textContent = `Status: używam bazy ${detectedDatabase}.`;
-  $("#backupInfo").textContent = `Status: aktywna baza SQL.\nBaza: ${detectedDatabase}`;
+  setBackupMeta(`Aktywna baza: ${detectedDatabase}.`, "success");
+  setBackupInfo({
+    tone: "success",
+    title: "Baza jest gotowa",
+    text: "Aplikacja korzysta z wcześniej podłączonej lokalnej kopii SQL.",
+    details: [
+      ["Baza", detectedDatabase],
+      ["Tryb", "Tylko do odczytu"],
+    ],
+  });
   updateBadges(state);
   await ensureDatabaseContextLoaded(state);
   return true;
@@ -1355,13 +1408,43 @@ function persistFavoriteReports(favorites) {
   }
 }
 
+function setBackupMeta(message, tone = "neutral") {
+  const element = $("#backupMeta");
+  element.textContent = message;
+  element.classList.remove("is-success", "is-error");
+  if (tone === "success") element.classList.add("is-success");
+  if (tone === "error") element.classList.add("is-error");
+}
+
+function setBackupInfo({ tone = "idle", title, text, details = [] }) {
+  const element = $("#backupInfo");
+  element.className = `connection-status is-${tone}`;
+  const rows = details.length
+    ? `<div class="connection-status-grid">${details.map(([label, value]) => `
+        <div class="connection-status-row">
+          <div class="connection-status-label">${escapeHtml(label)}</div>
+          <div class="connection-status-value">${escapeHtml(value)}</div>
+        </div>
+      `).join("")}</div>`
+    : "";
+  element.innerHTML = `
+    <div class="connection-status-title">${escapeHtml(title)}</div>
+    <div class="connection-status-text">${escapeHtml(text)}</div>
+    ${rows}
+  `;
+}
+
 async function scanBackups(state) {
   const initialPath = $("#backupPath").value.trim() || $("#backupPathDisplay").value.trim();
   $("#backupPath").value = "";
   $("#backupPathDisplay").value = "";
   $("#connectBackup").disabled = true;
-  $("#backupMeta").textContent = "Status: otwieram wybór pliku .BAK/.BAC...";
-  $("#backupInfo").textContent = "Status: wybierz backup w Eksploratorze Windows.";
+  setBackupMeta("Otwieram okno wyboru pliku backupu...");
+  setBackupInfo({
+    tone: "loading",
+    title: "Wybór pliku backupu",
+    text: "Za chwilę otworzy się Eksplorator Windows z filtrem dla plików .BAK i .BAC.",
+  });
   try {
     const response = await fetch("/api/pick-backup-file", {
       method: "POST",
@@ -1370,18 +1453,35 @@ async function scanBackups(state) {
         initial_path: initialPath,
       }),
     });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, "Nie udało się uruchomić wyboru pliku backupu.");
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się otworzyć wyboru pliku.");
     if (!payload.selected || !payload.path) {
-      $("#backupMeta").textContent = "Status: nie wybrano pliku backupu.";
-      $("#backupInfo").textContent = "Status: wybór pliku został anulowany.";
+      setBackupMeta("Nie wybrano pliku backupu.");
+      setBackupInfo({
+        tone: "idle",
+        title: "Wybór został anulowany",
+        text: "Wskaż plik .BAK lub .BAC, aby przejść do podłączenia lokalnej kopii bazy.",
+      });
       return;
     }
     state.backups = [payload];
     selectNewestBackup(state.backups);
   } catch (error) {
-    $("#backupMeta").textContent = `Status: błąd wgrywania pliku: ${error.message}`;
-    $("#backupInfo").textContent = `Status: błąd - ${error.message}`;
+    setBackupMeta(`Nie udało się wczytać pliku: ${error.message}`, "error");
+    setBackupInfo({
+      tone: "error",
+      title: "Błąd wyboru pliku",
+      text: error.message,
+    });
+  }
+}
+
+async function readJsonResponse(response, fallbackMessage) {
+  const body = await response.text();
+  try {
+    return body ? JSON.parse(body) : {};
+  } catch (_error) {
+    throw new Error(`${fallbackMessage} Zrestartuj lokalny serwer aplikacji i spróbuj ponownie.`);
   }
 }
 
@@ -1389,27 +1489,49 @@ function selectNewestBackup(backups) {
   const selected = backups[0];
   if (!selected) {
     $("#backupPathDisplay").value = "";
-    $("#backupMeta").textContent = "Status: nie znaleziono poprawnego pliku .BAK/.BAC.";
-    $("#backupInfo").textContent = "Status: brak backupu do podłączenia.";
+    setBackupMeta("Nie znaleziono poprawnego pliku .BAK lub .BAC.", "error");
+    setBackupInfo({
+      tone: "error",
+      title: "Brak pliku backupu",
+      text: "Nie udało się wskazać poprawnego pliku do podłączenia.",
+    });
     return;
   }
   $("#backupPath").value = selected.path;
   $("#backupPathDisplay").value = selected.path;
   $("#connectBackup").disabled = false;
-  $("#backupMeta").textContent = `Status: wybrano ${selected.name} (${selected.size_mb} MB).`;
-  $("#backupInfo").textContent = `Status: plik gotowy do podłączenia.\nPlik: ${selected.path}`;
+  setBackupMeta(`Wybrano plik ${selected.name} (${selected.size_mb} MB).`, "success");
+  setBackupInfo({
+    tone: "success",
+    title: "Backup gotowy do podłączenia",
+    text: "Plik został poprawnie wskazany. Możesz teraz uruchomić podłączenie lokalnej kopii bazy.",
+    details: [
+      ["Plik", selected.path],
+      ["Rozmiar", `${selected.size_mb} MB`],
+      ["Tryb", "Tylko do odczytu"],
+    ],
+  });
 }
 
 async function connectBackup(state) {
   const path = $("#backupPath").value.trim();
   const previousDatabase = $("#sqlDatabase").value.trim();
   if (!path) {
-    $("#backupMeta").textContent = "Status: najpierw kliknij „Wgraj plik” i wybierz backup.";
-    $("#backupInfo").textContent = "Status: brak wybranego pliku backupu.";
+    setBackupMeta("Najpierw kliknij „Wgraj plik” i wskaż backup.", "error");
+    setBackupInfo({
+      tone: "error",
+      title: "Brak wybranego backupu",
+      text: "Wskaż plik .BAK lub .BAC, aby rozpocząć podłączanie bazy.",
+    });
     return;
   }
-  $("#backupMeta").textContent = "Status: sprawdzam backup...";
-  $("#backupInfo").textContent = "Status: sprawdzam strukturę backupu.";
+  setBackupMeta("Sprawdzam backup przed podłączeniem...");
+  setBackupInfo({
+    tone: "loading",
+    title: "Weryfikacja backupu",
+    text: "Sprawdzam strukturę pliku i przygotowuję parametry odtworzenia lokalnej kopii.",
+    details: [["Plik", path]],
+  });
   $("#connectBackup").disabled = true;
   try {
     const inspected = await inspectSelectedBackup(path);
@@ -1418,8 +1540,17 @@ async function connectBackup(state) {
       server: $("#sqlServer").value.trim(),
       target_database: inspected.suggested_database || $("#sqlDatabase").value.trim(),
     };
-    $("#backupMeta").textContent = "Status: podłączam bazę read-only. To może potrwać...";
-    $("#backupInfo").textContent = `Status: odtwarzam kopię read-only.\nBaza: ${request.target_database}`;
+    setBackupMeta("Podłączam bazę w trybie tylko do odczytu. To może potrwać...");
+    setBackupInfo({
+      tone: "loading",
+      title: "Trwa podłączanie bazy",
+      text: "Odtwarzam lokalną kopię SQL i przygotowuję ją do pracy z raportami.",
+      details: [
+        ["Docelowa baza", request.target_database],
+        ["Źródło", path],
+        ["Tryb", "Tylko do odczytu"],
+      ],
+    });
     const response = await fetch("/api/connect-backup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1429,8 +1560,17 @@ async function connectBackup(state) {
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się podłączyć backupu.");
     $("#sqlDatabase").value = payload.database;
     persistDatabase(payload.database);
-    $("#backupMeta").textContent = `Status: podłączono bazę ${payload.database}.`;
-    $("#backupInfo").textContent = `Status: podłączono bazę read-only.\nBaza: ${payload.database}\nPlik: ${payload.source_path}`;
+    setBackupMeta(`Połączono z bazą ${payload.database}.`, "success");
+    setBackupInfo({
+      tone: "success",
+      title: "Baza została podłączona",
+      text: "Lokalna kopia SQL jest aktywna i gotowa do dalszej pracy w raportach.",
+      details: [
+        ["Baza", payload.database],
+        ["Plik źródłowy", payload.source_path],
+        ["Tryb", "Tylko do odczytu"],
+      ],
+    });
     updateBadges(state);
     updateTimeFilterMeta();
     await loadAvailableYears(state);
@@ -1442,8 +1582,13 @@ async function connectBackup(state) {
     updateBadges(state);
     renderActiveReport(state);
     if (!previousDatabase) renderNoDatabase(state);
-    $("#backupMeta").textContent = `Status: błąd podłączenia - ${error.message}`;
-    $("#backupInfo").textContent = `Status: błąd - ${error.message}`;
+    setBackupMeta(`Nie udało się podłączyć bazy: ${error.message}`, "error");
+    setBackupInfo({
+      tone: "error",
+      title: "Błąd podłączenia",
+      text: error.message,
+      details: path ? [["Plik", path]] : [],
+    });
   } finally {
     $("#connectBackup").disabled = !$("#backupPath").value.trim();
   }
@@ -1618,7 +1763,6 @@ function applyReportDataPayload(state, report, payload) {
   renderReportFilterControls(report, state);
   syncReportLayoutState(state);
   $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
-  renderCustomizePanel(state);
   updateReportNarrativeMeta(state);
   renderReportData(state);
   refreshOptimaFilter(state);
@@ -2140,19 +2284,13 @@ function renderActiveReport(state) {
   $("#reportSection").textContent = report.section;
   $("#reportTitle").textContent = report.title;
   $("#reportSummary").textContent = report.summary;
-  $("#reportQuestion").textContent = report.question;
-  $("#reportSources").textContent = report.sources.join(", ");
   renderReportFilterControls(report, state);
-  $("#reportPriority").textContent = `Priorytet: ${report.priority.toLowerCase()}`;
-  $("#reportPriority").dataset.priority = report.priority.toLowerCase();
   syncReportLayoutState(state);
   updateReportNarrativeMeta(state);
   $("#reportTags").innerHTML = report.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
   $("#reportControls").innerHTML = renderSelectableStack(report.controls, state.reportControlSelections, "control");
   $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
-  renderCustomizePanel(state);
   $("#reportAlerts").innerHTML = renderSelectableStack(report.alerts, state.reportAlertSelections, "alert");
-  $("#reportMetrics").innerHTML = buildMetricCards(report, state).map(metricCard).join("");
   renderReportActions(state);
   renderReportData(state);
   renderReportChart(state);
@@ -2202,6 +2340,7 @@ function renderReportData(state) {
   $("#reportDataMeta").textContent = buildReportDataMeta(report, state);
   updateReportFilterMeta(state);
   renderReportTable(
+    state,
     visibleHeaders,
     state.reportRows,
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
@@ -2211,22 +2350,76 @@ function renderReportData(state) {
 
 function renderReportDataPlaceholder(state, metaText, emptyMessage) {
   $("#reportDataMeta").textContent = metaText;
-  renderReportTable([], [], emptyMessage);
+  renderReportTable(state, [], [], emptyMessage);
   renderReportCompanionPanels(state);
 }
 
 function buildReportDataMeta(report, state) {
   const sourceLabel = state.reportSource?.module ? ` źródło: ${moduleLabel(state.reportSource.module)}.` : "";
-  return `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
+  const headerFilterLabel = reportUsesEmbeddedHeaderFilters(report)
+    ? " Dodatkowe filtry są dostępne w nagłówkach tabeli."
+    : "";
+  return `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}${headerFilterLabel}`;
 }
 
-function renderReportTable(headers, rows, emptyMessage) {
+function renderReportTable(state, headers, rows, emptyMessage) {
+  const report = getCurrentReport(state);
   $("#reportDataHead").innerHTML = headers.length
-    ? `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`
+    ? buildReportTableHead(report, state, headers)
     : "";
   $("#reportDataRows").innerHTML = rows.length
     ? rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
     : `<tr><td class="empty" colspan="${Math.max(headers.length, 1)}">${escapeHtml(emptyMessage)}</td></tr>`;
+}
+
+function buildReportTableHead(report, state, headers) {
+  const headRow = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`;
+  const filterRow = reportUsesEmbeddedHeaderFilters(report)
+    ? renderEmbeddedHeaderFilterRow(report, state, headers)
+    : "";
+  return `${headRow}${filterRow}`;
+}
+
+function renderEmbeddedHeaderFilterRow(report, state, headers) {
+  const config = EMBEDDED_HEADER_FILTERS[report.key] || [];
+  if (!config.length) return "";
+  return `
+    <tr class="report-header-filter-row">
+      ${headers.map((header) => renderEmbeddedHeaderFilterCell(config, header, state, headers)).join("")}
+    </tr>`;
+}
+
+function renderEmbeddedHeaderFilterCell(config, header, state, headers) {
+  const filterConfig = config.find((item) => normalizeText(item.header) === normalizeText(header));
+  if (!filterConfig) return '<th class="report-header-filter-cell is-empty"></th>';
+
+  const key = filterKey(filterConfig.filter);
+  const value = state.reportFilterValues?.[key] || {};
+  if (filterConfig.type === "select") {
+    const options = selectOptionsForFilter(filterConfig.filter, state.reportRawRows || state.reportRows || [], state.reportHeaders || headers);
+    return `
+      <th class="report-header-filter-cell">
+        <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="select">
+          <select class="report-header-filter-control" aria-label="${escapeHtml(filterConfig.filter)}">
+            <option value="">${escapeHtml(filterConfig.emptyLabel || "Wszystkie")}</option>
+            ${options.map((option) => `<option value="${escapeHtml(option)}"${option === value.value ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </label>
+      </th>`;
+  }
+
+  return `
+    <th class="report-header-filter-cell">
+      <label class="report-header-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filterConfig.filter)}" data-filter-type="text">
+        <input
+          type="text"
+          class="report-header-filter-control"
+          value="${escapeHtml(value.value || "")}"
+          placeholder="${escapeHtml(filterConfig.placeholder || "Filtruj")}"
+          aria-label="${escapeHtml(filterConfig.filter)}"
+        >
+      </label>
+    </th>`;
 }
 
 function renderReportCompanionPanels(state) {
@@ -2258,16 +2451,23 @@ function renderReportActions(state) {
     ? `SQL aktywny, ${state.reportRows.length.toLocaleString("pl-PL")} wierszy gotowych do eksportu.`
     : "SQL aktywny. Załaduj dane, aby włączyć wykres i eksport z danymi.";
   $("#reportActionMeta").textContent = readyLabel;
+  renderReportToolbar(state);
 }
 
-function renderCustomizePanel(state) {
-  const panel = $("#reportCustomizePanel");
-  const button = $("#toggleReportCustomize");
-  const isOpen = Boolean(state.reportCustomizeOpen);
-
-  panel.hidden = !isOpen;
-  button.classList.toggle("is-active", isOpen);
-  button.setAttribute("aria-expanded", String(isOpen));
+function renderReportToolbar(state) {
+  const activeMenu = state.reportToolbarMenuOpen || "";
+  [
+    ["export", "#toggleReportExportMenu", "#reportExportMenu"],
+    ["customize", "#toggleReportCustomizeMenu", "#reportCustomizeMenu"],
+    ["sql", "#toggleReportOptimaMenu", "#reportOptimaMenu"],
+  ].forEach(([menuKey, buttonSelector, panelSelector]) => {
+    const isOpen = activeMenu === menuKey;
+    const button = $(buttonSelector);
+    const panel = $(panelSelector);
+    button.classList.toggle("is-active", isOpen);
+    button.setAttribute("aria-expanded", String(isOpen));
+    panel.hidden = !isOpen;
+  });
 }
 
 function renderOptimaFilter(state) {
@@ -2278,12 +2478,12 @@ function renderOptimaFilter(state) {
   const hasLoadedRows = state.reportDataKey === report.key;
 
   if (!hasDatabase) {
-    meta.textContent = "Najpierw podlacz baze, aby wygenerowac warunek dla Optimy.";
-    panel.innerHTML = '<div class="available-card is-empty">Brak polaczenia z baza SQL.</div>';
+    meta.textContent = "Najpierw podłącz bazę, aby wygenerować warunek dla Optimy.";
+    panel.innerHTML = '<div class="available-card is-empty">Brak połączenia z bazą SQL.</div>';
     return;
   }
   if (!hasLoadedRows || state.reportDataStatus === "loading") {
-    meta.textContent = "Filtr do Optimy pojawi sie po zaladowaniu wynikow raportu.";
+    meta.textContent = "Filtr do Optimy pojawi się po załadowaniu wyników raportu.";
     panel.innerHTML = '<div class="available-card is-empty">Czekam na wyniki raportu.</div>';
     return;
   }
@@ -2293,14 +2493,14 @@ function renderOptimaFilter(state) {
     return;
   }
   if (state.reportOptimaFilterStatus === "error") {
-    meta.textContent = `Blad generowania filtra: ${state.reportOptimaFilterError || "nieznany blad"}`;
-    panel.innerHTML = '<div class="available-card is-empty">Nie udalo sie zbudowac filtra do Optimy.</div>';
+    meta.textContent = `Błąd generowania filtra: ${state.reportOptimaFilterError || "nieznany błąd"}`;
+    panel.innerHTML = '<div class="available-card is-empty">Nie udało się zbudować filtra do Optimy.</div>';
     return;
   }
 
   const model = state.reportOptimaFilter;
   if (!model?.supported) {
-    meta.textContent = model?.message || "Dla tego wyniku nie da sie zbudowac gotowego filtra.";
+    meta.textContent = model?.message || "Dla tego wyniku nie da się zbudować gotowego filtra.";
     panel.innerHTML = `<div class="available-card is-empty">${escapeHtml(model?.message || "Brak filtra do Optimy.")}</div>`;
     return;
   }
@@ -2308,7 +2508,7 @@ function renderOptimaFilter(state) {
   meta.textContent = `${model.target_list}: ${Number(model.record_count || 0).toLocaleString("pl-PL")} pozycji gotowych do filtrowania.`;
   panel.innerHTML = `
     <div class="optima-filter-card">
-      <span class="meta-label">Zalecane uzycie</span>
+      <span class="meta-label">Zalecane użycie</span>
       <strong>${escapeHtml(model.target_list)}</strong>
       <ol class="optima-filter-list">
         ${(model.instructions || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
@@ -2341,22 +2541,24 @@ function renderReportChart(state) {
   const panel = $("#reportChartPanel");
 
   panel.hidden = !state.reportChartEnabled;
+  panel.style.display = state.reportChartEnabled ? "" : "none";
   if (!state.reportChartEnabled) {
-    $("#reportChartMeta").textContent = "Wizualizacja jest wyłączona dla tego raportu.";
-    $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Kliknij „Włącz wykres”, aby zobaczyć wizualizację.</div>';
     return;
   }
   if (!hasRows) {
+    panel.style.display = "";
     $("#reportChartMeta").textContent = "Najpierw załaduj dane raportu, aby zbudować wykres.";
     $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Brak danych do wizualizacji.</div>';
     return;
   }
   if (!chartModel) {
+    panel.style.display = "";
     $("#reportChartMeta").textContent = "Tego zestawu nie da się automatycznie zwizualizować na podstawie aktualnych kolumn.";
     $("#reportChartContent").innerHTML = '<div class="available-card is-empty">Nie znaleziono pary etykieta + wartość liczbową.</div>';
     return;
   }
 
+  panel.style.display = "";
   $("#reportChartMeta").textContent = `Wykres oparty o kolumny „${chartModel.labelHeader}” i „${chartModel.valueHeader}”.`;
   $("#reportChartContent").innerHTML = chartMarkup(chartModel);
 }
@@ -2387,9 +2589,15 @@ function toggleReportChart(state) {
   renderReportChart(state);
 }
 
-function toggleReportCustomize(state) {
-  state.reportCustomizeOpen = !state.reportCustomizeOpen;
-  renderCustomizePanel(state);
+function toggleReportToolbarMenu(state, menuKey) {
+  state.reportToolbarMenuOpen = state.reportToolbarMenuOpen === menuKey ? "" : menuKey;
+  renderReportToolbar(state);
+}
+
+function closeReportToolbarMenus(state) {
+  if (!state.reportToolbarMenuOpen) return;
+  state.reportToolbarMenuOpen = "";
+  renderReportToolbar(state);
 }
 
 async function exportActiveReport(state, format, includeChart) {
@@ -2665,6 +2873,10 @@ function updateReportNarrativeMeta(state) {
   $("#reportScopeMeta").textContent = `${selectedItemCount(state.reportControlSelections)} z ${report.controls.length} kontroli aktywne`;
 }
 
+function reportUsesEmbeddedHeaderFilters(report) {
+  return Boolean(report && EMBEDDED_HEADER_FILTER_REPORTS.has(report.key));
+}
+
 function scoreHeaderAgainstFocus(header, text) {
   const normalizedHeader = normalizeText(header);
   const keywords = keywordsFromText(text);
@@ -2683,6 +2895,14 @@ function keywordsFromText(text) {
 }
 
 function renderReportFilterControls(report, state) {
+  const filterCard = $("#reportFilterCard");
+  const useEmbeddedHeaders = reportUsesEmbeddedHeaderFilters(report);
+  filterCard.hidden = useEmbeddedHeaders;
+  if (useEmbeddedHeaders) {
+    $("#reportFilterFields").innerHTML = "";
+    updateReportFilterMeta(state);
+    return;
+  }
   const controls = report.filters.map((filter) => reportFilterControl(filter, state)).join("");
   $("#reportFilterFields").innerHTML = controls || '<div class="available-card is-empty">Ten raport nie ma dodatkowych filtrów.</div>';
   updateReportFilterMeta(state);
@@ -2968,7 +3188,7 @@ async function refreshOptimaFilter(state) {
       }),
     });
     const payload = await response.json();
-    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udalo sie zbudowac filtra do Optimy.");
+    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się zbudować filtra do Optimy.");
     if (state.currentReportKey !== expectedReportKey || state.reportRows.length !== expectedRowCount) return;
     state.reportOptimaFilter = payload;
     state.reportOptimaFilterStatus = "ready";

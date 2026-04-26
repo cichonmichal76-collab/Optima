@@ -32,7 +32,7 @@ class LedgerAudit:
                         record,
                         "LEDGER_MISSING_WN",
                         "Brak konta Wn albo konta zapisu.",
-                        "UzupeÅnij konto Wn albo pole Konto z eksportu Optimy.",
+                        "Uzupełnij konto Wn albo pole Konto z eksportu Optimy.",
                     )
                 )
             if not (record.account_ma or record.account_opposite):
@@ -42,7 +42,7 @@ class LedgerAudit:
                         record,
                         "LEDGER_MISSING_MA",
                         "Brak konta Ma albo konta przeciwstawnego.",
-                        "UzupeÅnij konto Ma albo pole Konto przeciw. z eksportu Optimy.",
+                        "Uzupełnij konto Ma albo pole Konto przeciw. z eksportu Optimy.",
                     )
                 )
             if record.amount_wn == 0 and record.amount_ma == 0:
@@ -61,8 +61,8 @@ class LedgerAudit:
                         "WARNING",
                         record,
                         "LEDGER_MISSING_DESCRIPTION",
-                        "Brak opisu ksiÄgowania.",
-                        "UzupeÅnij opis lub popraw mapowanie kolumn.",
+                        "Brak opisu księgowania.",
+                        "Uzupełnij opis lub popraw mapowanie kolumn.",
                     )
                 )
             if period and record.accounting_date:
@@ -73,7 +73,7 @@ class LedgerAudit:
                             "WARNING",
                             record,
                             "LEDGER_DATE_OUT_OF_RANGE",
-                            "Data ksiÄgowania jest poza zakresem audytu.",
+                            "Data księgowania jest poza zakresem audytu.",
                             "Zweryfikuj okres eksportu i parametry audytu.",
                             confidence=0.85,
                         )
@@ -86,7 +86,7 @@ class LedgerAudit:
                             record,
                             "LEDGER_ACCOUNT_OUTSIDE_PLAN",
                             f"Konto {account} nie istnieje w planie kont.",
-                            "Zweryfikuj plan kont i dekretacj? dokumentu.",
+                            "Zweryfikuj plan kont i dekretację dokumentu.",
                         )
                     )
             if vat_accounts and record.description and "vat" in record.description.lower():
@@ -97,8 +97,8 @@ class LedgerAudit:
                             "WARNING",
                             record,
                             "LEDGER_VAT_ACCOUNT_UNEXPECTED",
-                            "Ksi?gowanie VAT wykorzystuje inne konto ni? zdefiniowane w konfiguracji.",
-                            "Sprawd? konta VAT i szablon dekretacji.",
+                            "Księgowanie VAT wykorzystuje inne konto niż zdefiniowane w konfiguracji.",
+                            "Sprawdź konta VAT i szablon dekretacji.",
                             confidence=0.8,
                         )
                     )
@@ -117,7 +117,7 @@ class LedgerAudit:
                         date=sample.accounting_date,
                         issue_code="LEDGER_UNBALANCED",
                         issue="Dokument jest niezbilansowany.",
-                        recommendation="Zweryfikuj komplet dekretÃ³w oraz kwoty Wn/Ma.",
+                        recommendation="Zweryfikuj komplet dekretów oraz kwoty Wn/Ma.",
                         confidence=0.98,
                     )
                 )

@@ -17,7 +17,7 @@ class OptimaFilterTarget:
 FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     "DOCUMENTS": OptimaFilterTarget(
         module="DOCUMENTS",
-        list_label="Obieg dokumentÃ³w / lista dokumentÃ³w",
+        list_label="Obieg dokumentów / lista dokumentów",
         id_field="DoN_DoNID",
         id_headers=("Optima DoNID",),
         number_field="DoN_NumerPelny",
@@ -25,7 +25,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "LEDGER": OptimaFilterTarget(
         module="LEDGER",
-        list_label="Zapisy ksiÄgowe / dekrety",
+        list_label="Zapisy księgowe / dekrety",
         id_field="DeN_DeNId",
         id_headers=("Optima DeNID",),
         number_field="DeN_NumerPelny",
@@ -41,7 +41,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "VAT_SALE": OptimaFilterTarget(
         module="VAT_SALE",
-        list_label="Rejestr VAT sprzedaÅ¼y",
+        list_label="Rejestr VAT sprzedaży",
         id_field="VaN_VaNID",
         id_headers=("Optima VaNID",),
         number_field="VaN_Dokument",
@@ -79,7 +79,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "CONTRACTORS": OptimaFilterTarget(
         module="CONTRACTORS",
-        list_label="Kartoteka kontrahentÃ³w",
+        list_label="Kartoteka kontrahentów",
         id_field="Knt_KntId",
         id_headers=("Optima KntID",),
         number_field="Knt_Kod",
@@ -87,7 +87,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "FIXED_ASSETS": OptimaFilterTarget(
         module="FIXED_ASSETS",
-        list_label="Årodki trwaÅe",
+        list_label="Środki trwałe",
         id_field="SrT_SrTID",
         id_headers=("Optima SrTID",),
         number_field="SrT_Dokument",
@@ -95,7 +95,7 @@ FILTER_TARGETS: dict[str, OptimaFilterTarget] = {
     ),
     "HR_PAYROLL": OptimaFilterTarget(
         module="HR_PAYROLL",
-        list_label="Kadry i pÅace",
+        list_label="Kadry i płace",
         id_field="PRE_PreId",
         id_headers=("Optima PreID",),
         number_field="PRE_Kod",
@@ -116,7 +116,7 @@ def build_optima_filter_snippets(
         return {
             "supported": False,
             "status": "unsupported",
-            "message": "Brak zdefiniowanego filtra dla tego moduÅu Optimy.",
+            "message": "Brak zdefiniowanego filtra dla tego modułu Optimy.",
         }
 
     if not rows:
@@ -133,14 +133,14 @@ def build_optima_filter_snippets(
         return {
             "supported": False,
             "status": "unsupported",
-            "message": "Ten wynik nie zawiera pewnego identyfikatora ani numeru pozwalaj?cego zbudowa? filtr do Optimy.",
+            "message": "Ten wynik nie zawiera pewnego identyfikatora ani numeru pozwalającego zbudować filtr do Optimy.",
             "target_list": target.list_label,
             "record_count": len(rows),
         }
 
     warning = None
     if len(rows) > 250:
-        warning = "Filtr obejmuje duzo pozycji. W Optimie najlepiej wkleić go do filtra zaawansowanego na odpowiedniej liscie i dopiero wtedy zawęzić widok."
+        warning = "Filtr obejmuje dużo pozycji. W Optimie najlepiej wkleić go do filtra zaawansowanego na odpowiedniej liście i dopiero wtedy zawęzić widok."
 
     return {
         "supported": True,
@@ -152,9 +152,9 @@ def build_optima_filter_snippets(
         "secondary": secondary,
         "warning": warning,
         "instructions": [
-            f"Otw?rz w Optimie list?: {target.list_label}.",
-            "Na dole listy rozwi? panel filtra zaawansowanego i uruchom Konstruktor filtra.",
-            "Na zakÅadce Zaawansowane wklej poniÅ¼szy warunek i uÅ¼yj Filtruj.",
+            f"Otwórz w Optimie listę: {target.list_label}.",
+            "Na dole listy rozwiń panel filtra zaawansowanego i uruchom Konstruktor filtra.",
+            "Na zakładce Zaawansowane wklej poniższy warunek i użyj Filtruj.",
         ],
         "message": "Gotowy warunek do wklejenia w filtr zaawansowany Optimy.",
     }
@@ -185,7 +185,7 @@ def _build_number_snippet(target: OptimaFilterTarget, rows: list[dict[str, Any]]
     return {
         "mode": "number",
         "label": "Filtr alternatywny po numerze",
-        "description": "Czytelniejszy wariant, przydatny gdy chcesz zawęzić widok po numerach dokumentow.",
+        "description": "Czytelniejszy wariant, przydatny gdy chcesz zawęzić widok po numerach dokumentów.",
         "field": target.number_field,
         "expression": _text_expression(target.number_field, values),
         "record_count": len(values),

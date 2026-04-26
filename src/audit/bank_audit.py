@@ -27,7 +27,7 @@ class BankAudit:
                         date=record.payment_date,
                         issue_code="BANK_TRANSFER_UNASSIGNED",
                         issue="Przelew nie ma przypisanego dokumentu lub rozliczenia.",
-                        recommendation="Powi?? przelew z należności? lub zobowi?zaniem.",
+                        recommendation="Powiąż przelew z należnością lub zobowiązaniem.",
                         confidence=0.85,
                     )
                 )
@@ -39,8 +39,8 @@ class BankAudit:
                             area="BANK",
                             document_number=record.document_number,
                             issue_code="BANK_FEE_ACCOUNT_UNEXPECTED",
-                            issue="OpÅata bankowa nie jest przypisana do konta kosztÃ³w finansowych.",
-                            recommendation="Zweryfikuj konto dla opÅat bankowych.",
+                            issue="Opłata bankowa nie jest przypisana do konta kosztów finansowych.",
+                            recommendation="Zweryfikuj konto dla opłat bankowych.",
                             confidence=0.85,
                         )
                     )
@@ -52,8 +52,8 @@ class BankAudit:
                             area="BANK",
                             document_number=record.document_number,
                             issue_code="BANK_PUBLIC_PAYMENT_ACCOUNT",
-                            issue="P?atno?? do US/ZUS trafi?a na nietypowe konto.",
-                            recommendation="Zweryfikuj konto bankowe i konfiguracj? odbiorcy publicznego.",
+                            issue="Płatność do US/ZUS trafiła na nietypowe konto.",
+                            recommendation="Zweryfikuj konto bankowe i konfigurację odbiorcy publicznego.",
                             confidence=0.8,
                         )
                     )
@@ -66,11 +66,10 @@ class BankAudit:
                         contractor=record.contractor_name,
                         date=record.payment_date,
                         issue_code="BANK_PAYMENT_NOT_SETTLED",
-                        issue="P?atno?? od kontrahenta lub do dostawcy nie jest w pe?ni rozliczona.",
-                        recommendation="Zweryfikuj status rozliczenia naleÅ¼noÅci lub zobowiÄzania.",
+                        issue="Płatność od kontrahenta lub do dostawcy nie jest w pełni rozliczona.",
+                        recommendation="Zweryfikuj status rozliczenia należności lub zobowiązania.",
                         confidence=0.8,
                     )
                 )
 
         return issues
-

@@ -29,7 +29,7 @@ class AccountPlanAudit:
                         document_number=record.account_number,
                         issue_code="ACCOUNT_DUPLICATE",
                         issue=f"Duplikat numeru konta: {record.account_number}.",
-                        recommendation="Ujednoli? numeracj? lub usun?? duplikat z eksportu.",
+                        recommendation="Ujednolić numerację lub usunąć duplikat z eksportu.",
                         confidence=0.95,
                     )
                 )
@@ -40,8 +40,8 @@ class AccountPlanAudit:
                         area="ACCOUNT_PLAN",
                         document_number=record.account_number,
                         issue_code="JPK_TAG_MISSING",
-                        issue="Brak znacznika JPK_KR_PD S_12_1 dla konta wymagajÄcego oznaczenia.",
-                        recommendation="Uzupe?nij znacznik JPK lub wy??cz kontrol? dla tego audytu.",
+                        issue="Brak znacznika JPK_KR_PD S_12_1 dla konta wymagającego oznaczenia.",
+                        recommendation="Uzupełnij znacznik JPK lub wyłącz kontrolę dla tego audytu.",
                         confidence=0.85,
                     )
                 )
@@ -53,8 +53,8 @@ class AccountPlanAudit:
                             area="ACCOUNT_PLAN",
                             document_number=record.account_number,
                             issue_code="JPK_TAG_CASE",
-                            issue="Znacznik JPK ma nieprawid?ow? wielko?? liter.",
-                            recommendation="Popraw wielko?? liter zgodnie ze s?ownikiem dopuszczalnych warto?ci.",
+                            issue="Znacznik JPK ma nieprawidłową wielkość liter.",
+                            recommendation="Popraw wielkość liter zgodnie ze słownikiem dopuszczalnych wartości.",
                             confidence=0.85,
                         )
                     )
@@ -70,8 +70,8 @@ class AccountPlanAudit:
                             area="ACCOUNT_PLAN",
                             document_number=record.account_number,
                             issue_code="ACCOUNT_INACTIVE_USED",
-                            issue="Nieaktywne konto zostaÅo uÅ¼yte w ksiÄgowaniach.",
-                            recommendation="Zweryfikuj status konta i histori? dekretacji.",
+                            issue="Nieaktywne konto zostało użyte w księgowaniach.",
+                            recommendation="Zweryfikuj status konta i historię dekretacji.",
                             confidence=0.9,
                         )
                     )
@@ -85,8 +85,8 @@ class AccountPlanAudit:
                         area="ACCOUNT_PLAN",
                         document_number=account,
                         issue_code="ACCOUNT_USED_NOT_FOUND",
-                        issue=f"Konto {account} zostaÅo uÅ¼yte w ksiÄgowaniach, ale nie istnieje w planie kont.",
-                        recommendation="Uzupe?nij plan kont albo popraw dekretacj?.",
+                        issue=f"Konto {account} zostało użyte w księgowaniach, ale nie istnieje w planie kont.",
+                        recommendation="Uzupełnij plan kont albo popraw dekretację.",
                         confidence=0.98,
                     )
                 )
