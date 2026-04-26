@@ -19,6 +19,7 @@ def build_report_query(
     year: int | str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    revenue_mode: str | None = None,
 ) -> OptimaReportQuery:
     if report_key == "package-status":
         return _build_package_status_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
@@ -33,7 +34,13 @@ def build_report_query(
     if report_key == "manual-entries":
         return _build_manual_entries_flagged_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "buildings":
-        return _build_buildings_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+        return _build_buildings_report(
+            period_yyyymm,
+            year=year,
+            date_from=date_from,
+            date_to=date_to,
+            revenue_mode=revenue_mode,
+        )
     if report_key == "construction-site-costs":
         return _build_construction_site_costs_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     raise ValueError(f"Brak jawnego zapytania SQL dla raportu: {report_key}")
@@ -1244,9 +1251,19 @@ def _build_buildings_report(
     year: int | str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    revenue_mode: str | None = None,
 ) -> OptimaReportQuery:
     where = _period_where("n.DeN_DataDok", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     time_condition = where.replace("WHERE ", "AND ", 1) if where else ""
+    normalized_revenue_mode = (revenue_mode or "full_730").strip().lower()
+    revenue_condition = "(wn.Acc_Numer LIKE '730-%' OR ma.Acc_Numer LIKE '730-%')"
+    revenue_mode_note = "Przychody liczone z pełnych obrotów kont 730-* przypiętych do budowy."
+    if normalized_revenue_mode == "closing_730_860":
+        revenue_condition = (
+            "((wn.Acc_Numer LIKE '730-%' AND ma.Acc_Numer = '860-01') "
+            "OR (ma.Acc_Numer LIKE '730-%' AND wn.Acc_Numer = '860-01'))"
+        )
+        revenue_mode_note = "Przychody liczone tylko z przeksięgowań 730-* -> 860-01."
     sql = f"""
 SET NOCOUNT ON;
 WITH SiteAccounts AS (
@@ -1373,7 +1390,7 @@ RevenueBase AS (
         WHERE parsed.SiteCode IS NOT NULL
         ORDER BY raw.SitePriority
     ) AS site
-    WHERE (wn.Acc_Numer LIKE '730-%' OR ma.Acc_Numer LIKE '730-%')
+    WHERE {revenue_condition}
       AND NULLIF(LTRIM(RTRIM(COALESCE(site.Budowa, ''))), '') IS NOT NULL
       AND ABS(COALESCE(e.DeE_Kwota, 0)) > 0
       {time_condition}
@@ -1440,6 +1457,7 @@ ORDER BY Budowa, Rok DESC, MiesiacNr DESC;
             "Raport Budowy pokazuje miesięczne podsumowanie przychodów i kosztów dla budów powiązanych z analitykami 500-*, 720-* i 730-*.",
             "Budowa jest ustalana po kodzie analityki konta, dzięki czemu raport łączy przychody, koszty i przeksięgowania dla tej samej budowy.",
             "Koszty są dzielone na podwykonawców, sp. z o.o., materiał i wynagrodzenia według kategorii dokumentu oraz przeksięgowań 720-*/500-*.",
+            revenue_mode_note,
         ),
     )
 

@@ -527,6 +527,7 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
     report_key = str(payload.get("report") or payload.get("report_key") or "").strip()
     module_code = str(payload.get("module") or "").strip()
     report_title = str(payload.get("report_title") or report_key or "Raport SQL").strip()
+    revenue_mode = str(payload.get("revenue_mode") or "").strip() or None
     server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
     database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
     allowed_years = payload.get("allowed_years")
@@ -544,7 +545,14 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        query = build_report_query(report_key, period, year=year, date_from=date_from, date_to=date_to)
+        query = build_report_query(
+            report_key,
+            period,
+            year=year,
+            date_from=date_from,
+            date_to=date_to,
+            revenue_mode=revenue_mode,
+        )
         sql = query.sql
         notes = query.notes
         source_type = "report"
@@ -578,6 +586,7 @@ def report_data(payload: dict[str, Any]) -> dict[str, Any]:
             "year": year,
             "date_from": date_from,
             "date_to": date_to,
+            "revenue_mode": revenue_mode,
         },
     }
 

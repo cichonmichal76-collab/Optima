@@ -371,6 +371,14 @@ def test_buildings_report_exposes_monthly_margin_columns():
     assert "n.DeN_DataDok < '2026-04-01'" in query.sql
     assert query.notes
 
+
+def test_buildings_report_can_limit_revenue_to_closing_entries():
+    query = build_report_query("buildings", "202512", revenue_mode="closing_730_860")
+
+    assert "ma.Acc_Numer = '860-01'" in query.sql
+    assert "wn.Acc_Numer = '860-01'" in query.sql
+    assert any("860-01" in note for note in query.notes)
+
 def test_report_data_uses_explicit_buildings_query(monkeypatch):
     def fake_run_sqlcmd_table(sql, config):
         assert "RevenueBase AS (" in sql
@@ -393,3 +401,26 @@ def test_report_data_uses_explicit_buildings_query(monkeypatch):
     assert payload["rows"] == [{"Budowa": "INDUSTRY,ORZESZE", "Rok": "2026", "Miesiac": "Marzec", "Przychody": "190600.00"}]
     assert payload["source"]["source_type"] == "report"
     assert payload["source"]["report"] == "buildings"
+
+
+def test_report_data_passes_buildings_revenue_mode(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "860-01" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Budowa", "Przychody"], [{"Budowa": "CAT", "Przychody": "872565.13"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "buildings",
+            "report_title": "Budowy",
+            "module": "LEDGER",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2025"],
+            "revenue_mode": "closing_730_860",
+        }
+    )
+
+    assert payload["rows"] == [{"Budowa": "CAT", "Przychody": "872565.13"}]
+    assert payload["source"]["revenue_mode"] == "closing_730_860"

@@ -915,8 +915,14 @@ const REPORT_GROUPS = [
         priority: "Wysoki",
         queryKey: "buildings",
         sources: ["Optima", "Księga"],
-        filters: ["Okres od-do", "Budowa", "Rok", "Miesiac", "Kwota od-do"],
-        visibleFilters: ["Budowa", "Rok", "Miesiac", "Kwota od-do"],
+        filters: ["Okres od-do", "Budowa", "Rok", "Miesiac", "Kwota od-do", "Tryb przychodów"],
+        visibleFilters: ["Budowa", "Rok", "Miesiac", "Kwota od-do", "Tryb przychodów"],
+        filterOptions: {
+          "Tryb przychodów": [
+            { value: "closing_730_860", label: "Tylko 730 -> 860-01" },
+            { value: "full_730", label: "Pełne obroty 730" },
+          ],
+        },
         tags: ["budowy", "marża", "przychody", "koszty"],
         primaryModule: "LEDGER",
         relatedModules: ["LEDGER", "ACCOUNT_PLAN"],
@@ -2092,7 +2098,7 @@ async function loadActiveReportData(state) {
 }
 
 function buildReportDataRequest(report, state) {
-  return {
+  const request = {
     report: report.queryKey,
     report_title: report.title,
     module: report.primaryModule,
@@ -2101,6 +2107,10 @@ function buildReportDataRequest(report, state) {
     ...getAllowedYearsPayload(state),
     ...getTimeFilterPayload(state),
   };
+  if (report?.key === "buildings") {
+    request.revenue_mode = buildingsRevenueModeValue(state);
+  }
+  return request;
 }
 
 function applyReportDataPayload(state, report, payload) {
@@ -3878,14 +3888,14 @@ function renderReportFilterControls(report, state) {
     return;
   }
   const visibleFilters = report.visibleFilters?.length ? report.visibleFilters : report.filters;
-  const controls = visibleFilters.map((filter) => reportFilterControl(filter, state)).join("");
+  const controls = visibleFilters.map((filter) => reportFilterControl(filter, state, report)).join("");
   $("#reportFilterFields").innerHTML = controls || '<div class="available-card is-empty">Ten raport nie ma dodatkowych filtrów.</div>';
   updateReportFilterMeta(state);
 }
 
-function reportFilterControl(filter, state) {
+function reportFilterControl(filter, state, report = getCurrentReport(state)) {
   const key = filterKey(filter);
-  const type = filterControlType(filter);
+  const type = filterControlType(filter, report);
   const value = state.reportFilterValues?.[key] || {};
 
   if (type === "date-link") {
@@ -3917,6 +3927,18 @@ function reportFilterControl(filter, state) {
       </label>`;
   }
 
+  if (type === "server-select") {
+    const options = reportServerFilterOptions(report, filter);
+    const selectedValue = value.value || defaultServerFilterValue(report, filter);
+    return `
+      <label class="report-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="server-select">
+        ${escapeHtml(filter)}
+        <select data-server-default="${escapeHtml(defaultServerFilterValue(report, filter))}">
+          ${options.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === selectedValue ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+        </select>
+      </label>`;
+  }
+
   if (type === "multiselect") {
     const selectedValues = new Set(value.values || []);
     const options = selectOptionsForFilter(filter, state.reportRawRows || state.reportRows || [], state.reportHeaders || []);
@@ -3943,7 +3965,16 @@ function reportFilterControl(filter, state) {
 }
 
 function applyReportSpecificFilters(state) {
+  const report = getCurrentReport(state);
+  const previousServerFilters = collectServerBackedReportFilters(report, state);
   rememberReportFilterValues(state);
+  const nextServerFilters = collectServerBackedReportFilters(report, state);
+  if (JSON.stringify(previousServerFilters) !== JSON.stringify(nextServerFilters)) {
+    state.reportDataStatus = "loading";
+    renderReportData(state);
+    loadActiveReportData(state);
+    return;
+  }
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
   setOptimaFilterLoading(state);
   renderReportData(state);
@@ -3951,12 +3982,22 @@ function applyReportSpecificFilters(state) {
 }
 
 function clearReportSpecificFilters(state) {
+  const report = getCurrentReport(state);
+  const previousServerFilters = collectServerBackedReportFilters(report, state);
   state.reportFilterValues = {};
-  renderReportFilterControls(getCurrentReport(state), state);
+  renderReportFilterControls(report, state);
+  rememberReportFilterValues(state);
+  const nextServerFilters = collectServerBackedReportFilters(report, state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
   setOptimaFilterLoading(state);
   saveInteractiveReportState(state);
   renderReportData(state);
+  if (JSON.stringify(previousServerFilters) !== JSON.stringify(nextServerFilters)) {
+    state.reportDataStatus = "loading";
+    renderReportData(state);
+    loadActiveReportData(state);
+    return;
+  }
   refreshOptimaFilter(state);
 }
 
@@ -3980,7 +4021,7 @@ function clearSingleReportFilterField(field) {
   }
 
   field.querySelectorAll("select").forEach((select) => {
-    select.value = "";
+    select.value = type === "server-select" ? (select.dataset.serverDefault || "") : "";
   });
   field.querySelectorAll("input").forEach((input) => {
     if (input.type === "checkbox") {
@@ -4047,6 +4088,17 @@ function rememberReportFilterValues(state) {
       };
       return;
     }
+    if (type === "server-select") {
+      const input = field.querySelector("select");
+      values[key] = {
+        type,
+        label: field.dataset.filterLabel || "",
+        value: input?.value.trim() || "",
+        defaultValue: input?.dataset.serverDefault || "",
+        headers: targetHeaders,
+      };
+      return;
+    }
     const input = field.querySelector("input, select");
     values[key] = {
       type,
@@ -4069,6 +4121,7 @@ function filterReportRows(state, rows) {
 }
 
 function rowMatchesReportFilter(row, headers, filter) {
+  if (filter.type === "server-select") return true;
   if (filter.type === "amount-range") {
     const min = filter.min === "" ? null : Number(filter.min);
     const max = filter.max === "" ? null : Number(filter.max);
@@ -4160,6 +4213,7 @@ function rowMatchesReportFilter(row, headers, filter) {
 function filterValueIsActive(filter) {
   if (!filter) return false;
   if (filter.type === "amount-range") return filter.min !== "" || filter.max !== "";
+  if (filter.type === "server-select") return filter.value !== "" && filter.value !== (filter.defaultValue || "");
   if (filter.type === "date-condition") {
     if (!filter.operator) return false;
     if (filter.operator === "between") return filter.value !== "" || filter.valueTo !== "";
@@ -4203,13 +4257,42 @@ function reportHasRenderedHeaderFilters(state, report) {
   return document.querySelectorAll("#reportDataHead [data-report-filter]").length > 0;
 }
 
-function filterControlType(filter) {
+function filterControlType(filter, report = null) {
+  if (isServerBackedReportFilter(report, filter)) return "server-select";
   const normalized = normalizeText(filter);
   if (normalized.includes("okres") || normalized.includes("data") || normalized.includes("typ daty")) return "date-link";
   if (normalized.includes("kwota") || normalized.includes("suma") || normalized.includes("wartosc")) return "amount-range";
   if (normalized.includes("budowa")) return "multiselect";
   if (normalized.includes("status") || normalized.includes("typ dokumentu") || normalized.includes("waluta") || normalized.includes("priorytet") || normalized.includes("rok") || normalized.includes("miesiac")) return "select";
   return "text";
+}
+
+function reportServerFilterOptions(report, filter) {
+  return report?.filterOptions?.[filter] || [];
+}
+
+function defaultServerFilterValue(report, filter) {
+  return reportServerFilterOptions(report, filter)[0]?.value || "";
+}
+
+function isServerBackedReportFilter(report, filter) {
+  return Boolean(report?.filterOptions?.[filter]?.length);
+}
+
+function collectServerBackedReportFilters(report, state) {
+  const result = {};
+  if (!report?.filterOptions) return result;
+  Object.keys(report.filterOptions).forEach((label) => {
+    const key = filterKey(label);
+    result[key] = state.reportFilterValues?.[key]?.value || defaultServerFilterValue(report, label);
+  });
+  return result;
+}
+
+function buildingsRevenueModeValue(state) {
+  const report = REPORTS_BY_KEY[state.currentReportKey] || getCurrentReport(state);
+  const key = filterKey("Tryb przychodów");
+  return state.reportFilterValues?.[key]?.value || defaultServerFilterValue(report, "Tryb przychodów") || "full_730";
 }
 
 function selectOptionsForFilter(filter, rows, headers) {
