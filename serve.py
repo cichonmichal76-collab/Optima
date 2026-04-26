@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
-from src.connectors.optima_backup import inspect_backup, restore_backup, scan_backup_files
+from src.connectors.optima_backup import inspect_backup, pick_backup_file, restore_backup, scan_backup_files
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 from src.connectors.optima_filter_snippets import build_optima_filter_snippets
 from src.connectors.optima_report_queries import build_report_query
@@ -76,6 +76,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/connect-backup":
             self._handle_connect_backup()
+            return
+        if self.path == "/api/pick-backup-file":
+            self._handle_pick_backup_file()
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
 
@@ -205,6 +208,20 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
                 sqlcmd_path=str(payload.get("sqlcmd") or "").strip() or None,
             )
             self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_pick_backup_file(self) -> None:
+        try:
+            payload = self._read_json_body()
+            selected_path = pick_backup_file(str(payload.get("initial_path") or ""))
+            if not selected_path:
+                self._send_json({"selected": False, "path": ""})
+                return
+
+            backups = scan_backup_files([selected_path])
+            selected = backups[0] if backups else {"path": selected_path, "name": Path(selected_path).name}
+            self._send_json({"selected": True, **selected})
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
 

@@ -39,6 +39,11 @@ def scan_backup_files(extra_roots: list[str] | None = None) -> list[dict[str, An
     return backups
 
 
+def pick_backup_file(initial_path: str | None = None) -> str:
+    initial_dir = _resolve_backup_dialog_initial_dir(initial_path)
+    return _ask_backup_filename(initial_dir)
+
+
 def inspect_backup(path: str, server: str = r".\SQLEXPRESS02", sqlcmd_path: str | None = None) -> dict[str, Any]:
     backup_path = _validate_backup_path(path)
     config = SqlcmdConfig(server=server, database="master", sqlcmd_path=sqlcmd_path)
@@ -142,6 +147,20 @@ def sanitize_identifier(value: str) -> str:
     return text[:120]
 
 
+def _resolve_backup_dialog_initial_dir(initial_path: str | None) -> str:
+    if initial_path:
+        candidate = Path(initial_path).expanduser()
+        if candidate.is_file():
+            candidate = candidate.parent
+        if candidate.exists():
+            return str(candidate)
+
+    for root in _default_scan_roots():
+        if root.exists():
+            return str(root if root.is_dir() else root.parent)
+    return str(Path.home())
+
+
 def _default_scan_roots() -> list[Path]:
     roots: list[Path] = []
     for drive in string.ascii_uppercase:
@@ -151,6 +170,36 @@ def _default_scan_roots() -> list[Path]:
     home = Path.home()
     roots.extend([home / "Downloads", home / "Desktop", home / "OneDrive" / "Pulpit"])
     return roots
+
+
+def _ask_backup_filename(initial_dir: str | None = None) -> str:
+    root = None
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001 - environment-specific GUI availability.
+        raise RuntimeError("Nie udało się otworzyć okna wyboru pliku backupu.") from exc
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        return filedialog.askopenfilename(
+            title="Wybierz backup SQL",
+            initialdir=initial_dir or str(Path.home()),
+            filetypes=[
+                ("Backup SQL (*.bak, *.bac)", "*.bak *.bac"),
+                ("Pliki BAK", "*.bak"),
+                ("Pliki BAC", "*.bac"),
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001 - environment-specific GUI availability.
+        raise RuntimeError("Nie udało się otworzyć okna wyboru pliku backupu.") from exc
+    finally:
+        try:
+            root.destroy()
+        except Exception:  # noqa: BLE001 - best effort cleanup only.
+            pass
 
 
 def _iter_backup_candidates(root: Path) -> list[Path]:

@@ -449,10 +449,10 @@ input[type="date"] {
   min-width: 0;
   padding: 18px 20px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--sidebar-tile-border);
-  color: var(--sidebar-tile-ink);
-  box-shadow: 0 10px 28px rgba(10, 27, 22, 0.18);
+  background: linear-gradient(180deg, rgba(246, 248, 247, 0.98) 0%, rgba(236, 240, 238, 0.96) 100%);
+  border-color: rgba(128, 140, 134, 0.22);
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(23, 32, 28, 0.1);
 }
 
 .topbar h2 {
@@ -464,12 +464,20 @@ input[type="date"] {
 }
 
 .topbar p {
-  color: var(--sidebar-tile-muted);
+  color: #55625d;
   margin-top: 4px;
 }
 
 .topbar .eyebrow {
-  color: #9ad9c5;
+  color: #56645f;
+}
+
+.topbar-db.is-disconnected #connectedDatabaseName {
+  color: var(--red);
+}
+
+.topbar-db.is-connected #connectedDatabaseName {
+  color: var(--accent);
 }
 
 .status-strip {
@@ -496,17 +504,17 @@ input[type="date"] {
   align-items: end;
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--sidebar-tile-border);
+  border: 1px solid rgba(128, 140, 134, 0.2);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px rgba(10, 27, 22, 0.16);
+  background: linear-gradient(180deg, rgba(246, 248, 247, 0.96) 0%, rgba(234, 239, 236, 0.94) 100%);
+  box-shadow: 0 10px 28px rgba(23, 32, 28, 0.08);
 }
 
 .time-filter-bar label {
   display: grid;
   gap: 5px;
   min-width: 0;
-  color: var(--sidebar-tile-muted);
+  color: #55625d;
 }
 
 .time-filter-bar button {
@@ -515,7 +523,7 @@ input[type="date"] {
 
 .time-filter-meta {
   grid-column: 1 / -1;
-  color: var(--sidebar-tile-muted);
+  color: #68756f;
   font-size: 12px;
 }
 
@@ -535,24 +543,12 @@ input[type="date"] {
   gap: 18px;
 }
 
-.start-hero {
-  display: grid;
-  gap: 8px;
-  padding: 22px;
-}
-
-.start-hero h3 {
-  font-size: clamp(26px, 3vw, 40px);
-}
-
-.start-hero p,
 .start-card p {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
 }
 
-.start-grid,
 .communication-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -563,6 +559,34 @@ input[type="date"] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
+}
+
+.start-empty-state {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  padding: 22px;
+  border: 1px dashed rgba(23, 107, 91, 0.28);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(23, 107, 91, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(246, 250, 248, 0.98) 100%);
+}
+
+.start-empty-state strong {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.start-empty-state p,
+.start-empty-hint {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.start-empty-hint {
+  font-size: 13px;
 }
 
 .start-card {
@@ -879,6 +903,48 @@ input[type="date"] {
 .report-hero-head {
   align-items: start;
   margin-bottom: 16px;
+}
+
+.report-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-title-row h3 {
+  margin: 0;
+}
+
+.report-favorite-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(23, 107, 91, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #6c7c76;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.report-favorite-button span {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.report-favorite-button:hover {
+  border-color: rgba(23, 107, 91, 0.45);
+  color: #176b5b;
+  transform: translateY(-1px);
+}
+
+.report-favorite-button.is-active {
+  border-color: rgba(191, 145, 30, 0.35);
+  background: #fff5d8;
+  color: #b77908;
 }
 
 .report-summary {
@@ -1344,7 +1410,6 @@ pre {
   .metrics-grid,
   .report-actions-grid,
   .report-layout,
-  .start-grid,
   .start-favorites,
   .communication-grid,
   .admin-grid,
@@ -1375,7 +1440,6 @@ pre {
   .metrics-grid,
   .report-actions-grid,
   .report-layout,
-  .start-grid,
   .start-favorites,
   .communication-grid,
   .admin-grid,

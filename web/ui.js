@@ -1093,9 +1093,31 @@ export function initApp(state) {
 }
 
 function bindEvents(state) {
+  bindCommunicationEvents(state);
+  bindAdministrationEvents(state);
+  bindReportEvents(state);
+  bindNavigationEvents(state);
+}
+
+function bindCommunicationEvents(state) {
   $("#scanBackups").addEventListener("click", () => scanBackups(state));
   $("#connectBackup").addEventListener("click", () => connectBackup(state));
   $("#refreshDataCatalogPanel").addEventListener("click", () => loadAvailableData(state));
+  $("#sqlDatabase").addEventListener("change", () => handleDatabaseSelectionChange(state));
+  $("#filterYear").addEventListener("focus", () => ensureAvailableYearsLoaded(state));
+  $("#filterYear").addEventListener("pointerdown", () => ensureAvailableYearsLoaded(state));
+  $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
+  $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
+}
+
+function bindAdministrationEvents(state) {
+  $("#adminValidationFile").addEventListener("change", () => loadAdminFile(state));
+  $("#adminValidationKind").addEventListener("change", () => resetAdministrationValidationState(state));
+  $("#runAdminValidation").addEventListener("click", () => runAdminValidation(state));
+  $("#clearAdminValidation").addEventListener("click", () => clearAdminValidation(state));
+}
+
+function bindReportEvents(state) {
   $("#refreshReportData").addEventListener("click", () => loadActiveReportData(state));
   $("#toggleReportCustomize").addEventListener("click", () => toggleReportCustomize(state));
   $("#toggleFavoriteReport").addEventListener("click", () => toggleFavoriteReport(state));
@@ -1106,27 +1128,6 @@ function bindEvents(state) {
   $("#exportPdfChart").addEventListener("click", () => exportActiveReport(state, "pdf", true));
   $("#applyReportFilters").addEventListener("click", () => applyReportSpecificFilters(state));
   $("#clearReportFilters").addEventListener("click", () => clearReportSpecificFilters(state));
-  $("#sqlDatabase").addEventListener("change", () => {
-    persistDatabase($("#sqlDatabase").value.trim());
-    updateBadges(state);
-    loadAvailableYears(state);
-    loadAvailableData(state);
-    renderAdministration(state);
-    renderActiveReport(state);
-    loadActiveReportData(state);
-  });
-  $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
-  $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
-  $("#adminValidationFile").addEventListener("change", () => loadAdminFile(state));
-  $("#adminValidationKind").addEventListener("change", () => {
-    state.adminValidationResult = null;
-    state.adminValidationError = "";
-    if (state.adminValidationStatus === "ready") state.adminValidationStatus = "idle";
-    refreshAdminProfileInputs();
-    renderAdministration(state);
-  });
-  $("#runAdminValidation").addEventListener("click", () => runAdminValidation(state));
-  $("#clearAdminValidation").addEventListener("click", () => clearAdminValidation(state));
   $("#reportFilterFields").addEventListener("keydown", (event) => {
     if (event.key === "Enter") applyReportSpecificFilters(state);
   });
@@ -1159,6 +1160,9 @@ function bindEvents(state) {
     if (!copyButton) return;
     copyOptimaExpression(copyButton);
   });
+}
+
+function bindNavigationEvents(state) {
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
     if (viewItem) {
@@ -1181,46 +1185,45 @@ function bindEvents(state) {
   });
 }
 
+async function handleDatabaseSelectionChange(state) {
+  persistDatabase($("#sqlDatabase").value.trim());
+  updateBadges(state);
+  await loadAvailableYears(state);
+  await loadAvailableData(state);
+  renderAdministration(state);
+  renderActiveReport(state);
+  await loadActiveReportData(state);
+}
+
+function resetAdministrationValidationState(state) {
+  state.adminValidationResult = null;
+  state.adminValidationError = "";
+  if (state.adminValidationStatus === "ready") state.adminValidationStatus = "idle";
+  refreshAdminProfileInputs();
+  renderAdministration(state);
+}
+
 function selectView(state, viewKey) {
   if (viewKey === "report") {
-    state.currentView = "report";
-    state.expandedSidebarGroupId = state.expandedSidebarGroupId || getReportGroupId(state.currentReportKey);
-    renderSideMenu(state);
-    renderCurrentView(state);
-    renderActiveReport(state);
-    updateBadges(state);
-    loadActiveReportData(state);
+    activateReportView(state, { loadData: true });
     return;
   }
 
   if (viewKey === "administration") {
-    state.currentView = "administration";
-    renderSideMenu(state);
-    renderCurrentView(state);
-    renderAdministration(state);
-    updateBadges(state);
+    activateAdministrationView(state);
     return;
   }
 
-  state.currentView = viewKey === "communication" ? "communication" : "start";
-  renderSideMenu(state);
-  renderCurrentView(state);
-  renderStartFavorites(state);
-  updateBadges(state);
+  activateStaticView(state, viewKey === "communication" ? "communication" : "start");
 }
 
 function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
-  state.currentView = "report";
   state.currentReportKey = reportKey;
   state.expandedSidebarGroupId = getReportGroupId(reportKey);
   resetInteractiveReportState(state);
   clearReportData(state);
-  renderSideMenu(state);
-  renderCurrentView(state);
-  renderActiveReport(state);
-  updateBadges(state);
-  loadActiveReportData(state);
+  activateReportView(state, { loadData: true });
 }
 
 function toggleReportGroup(state, groupId) {
@@ -1239,6 +1242,32 @@ function resetInteractiveReportState(state) {
   clearOptimaFilterState(state);
 }
 
+function activateReportView(state, { loadData = false } = {}) {
+  state.currentView = "report";
+  state.expandedSidebarGroupId = state.expandedSidebarGroupId || getReportGroupId(state.currentReportKey);
+  renderSideMenu(state);
+  renderCurrentView(state);
+  renderActiveReport(state);
+  updateBadges(state);
+  if (loadData) loadActiveReportData(state);
+}
+
+function activateAdministrationView(state) {
+  state.currentView = "administration";
+  renderSideMenu(state);
+  renderCurrentView(state);
+  renderAdministration(state);
+  updateBadges(state);
+}
+
+function activateStaticView(state, viewKey) {
+  state.currentView = viewKey;
+  renderSideMenu(state);
+  renderCurrentView(state);
+  renderStartFavorites(state);
+  updateBadges(state);
+}
+
 async function restoreKnownDatabase(state) {
   const restored = await ensureDatabaseAvailable(state);
   if (restored) {
@@ -1248,7 +1277,10 @@ async function restoreKnownDatabase(state) {
 }
 
 async function ensureDatabaseAvailable(state) {
-  if ($("#sqlDatabase").value.trim()) return true;
+  if ($("#sqlDatabase").value.trim()) {
+    await ensureDatabaseContextLoaded(state);
+    return true;
+  }
   const storedDatabase = readStoredDatabase();
   const detectedDatabase = storedDatabase || await detectLatestDatabase();
   if (!detectedDatabase || $("#sqlDatabase").value.trim()) return Boolean($("#sqlDatabase").value.trim());
@@ -1258,10 +1290,20 @@ async function ensureDatabaseAvailable(state) {
   $("#backupMeta").textContent = `Status: używam bazy ${detectedDatabase}.`;
   $("#backupInfo").textContent = `Status: aktywna baza SQL.\nBaza: ${detectedDatabase}`;
   updateBadges(state);
-  await loadAvailableYears(state);
-  await loadAvailableData(state);
-  renderAdministration(state);
+  await ensureDatabaseContextLoaded(state);
   return true;
+}
+
+async function ensureDatabaseContextLoaded(state) {
+  const hasYears = (state.availableYears || []).length > 0;
+  const hasRenderedYearOptions = $("#filterYear").options.length > 1;
+  if (!hasYears || !hasRenderedYearOptions) {
+    await loadAvailableYears(state);
+  }
+  if (!(state.availableData || []).length) {
+    await loadAvailableData(state);
+  }
+  renderAdministration(state);
 }
 
 async function detectLatestDatabase() {
@@ -1314,16 +1356,28 @@ function persistFavoriteReports(favorites) {
 }
 
 async function scanBackups(state) {
-  const directory = $("#backupDirectory").value.trim();
+  const initialPath = $("#backupPath").value.trim() || $("#backupPathDisplay").value.trim();
   $("#backupPath").value = "";
+  $("#backupPathDisplay").value = "";
   $("#connectBackup").disabled = true;
-  $("#backupMeta").textContent = "Status: szukam pliku .BAK/.BAC w wybranym katalogu...";
-  $("#backupInfo").textContent = "Status: skanowanie katalogu.";
+  $("#backupMeta").textContent = "Status: otwieram wybór pliku .BAK/.BAC...";
+  $("#backupInfo").textContent = "Status: wybierz backup w Eksploratorze Windows.";
   try {
-    const query = directory ? `?root=${encodeURIComponent(directory)}` : "";
-    const response = await fetch(`/api/backups${query}`);
+    const response = await fetch("/api/pick-backup-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initial_path: initialPath,
+      }),
+    });
     const payload = await response.json();
-    state.backups = payload.backups || [];
+    if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się otworzyć wyboru pliku.");
+    if (!payload.selected || !payload.path) {
+      $("#backupMeta").textContent = "Status: nie wybrano pliku backupu.";
+      $("#backupInfo").textContent = "Status: wybór pliku został anulowany.";
+      return;
+    }
+    state.backups = [payload];
     selectNewestBackup(state.backups);
   } catch (error) {
     $("#backupMeta").textContent = `Status: błąd wgrywania pliku: ${error.message}`;
@@ -1334,11 +1388,13 @@ async function scanBackups(state) {
 function selectNewestBackup(backups) {
   const selected = backups[0];
   if (!selected) {
-    $("#backupMeta").textContent = "Status: nie znaleziono pliku .BAK/.BAC w tym katalogu.";
+    $("#backupPathDisplay").value = "";
+    $("#backupMeta").textContent = "Status: nie znaleziono poprawnego pliku .BAK/.BAC.";
     $("#backupInfo").textContent = "Status: brak backupu do podłączenia.";
     return;
   }
   $("#backupPath").value = selected.path;
+  $("#backupPathDisplay").value = selected.path;
   $("#connectBackup").disabled = false;
   $("#backupMeta").textContent = `Status: wybrano ${selected.name} (${selected.size_mb} MB).`;
   $("#backupInfo").textContent = `Status: plik gotowy do podłączenia.\nPlik: ${selected.path}`;
@@ -1473,6 +1529,14 @@ async function loadAvailableYears(state) {
   }
 }
 
+async function ensureAvailableYearsLoaded(state) {
+  if (!$("#sqlDatabase").value.trim()) return;
+  const hasLoadedYears = (state.availableYears || []).length > 0;
+  const hasMultipleOptions = $("#filterYear").options.length > 1;
+  if (hasLoadedYears && hasMultipleOptions) return;
+  await loadAvailableYears(state);
+}
+
 function renderYearOptions(state, selectedYear) {
   const years = state.availableYears || [];
   const fallback = selectedYear && !years.includes(selectedYear) ? [selectedYear] : [];
@@ -1513,14 +1577,7 @@ async function loadActiveReportData(state) {
   state.reportDataKey = report.key;
   renderReportData(state);
 
-  const request = {
-    report: report.queryKey,
-    report_title: report.title,
-    module: report.primaryModule,
-    server: $("#sqlServer").value.trim(),
-    database: $("#sqlDatabase").value.trim(),
-    ...getTimeFilterPayload(),
-  };
+  const request = buildReportDataRequest(report);
 
   try {
     const response = await fetch("/api/report-data", {
@@ -1532,35 +1589,52 @@ async function loadActiveReportData(state) {
     if (!response.ok || payload.error) {
       throw new Error(payload.error || "Nie udało się pobrać wyników raportu.");
     }
-    state.reportHeaders = payload.headers || [];
-    state.reportRawRows = payload.rows || [];
-    state.reportRows = filterReportRows(state, state.reportRawRows);
-    state.reportNotes = payload.notes || [];
-    state.reportSource = payload.source || null;
-    state.reportOptimaFilter = null;
-    state.reportOptimaFilterStatus = "loading";
-    state.reportOptimaFilterError = "";
-    state.reportDataStatus = "ready";
-    state.reportDataKey = report.key;
-    renderReportFilterControls(report, state);
-    syncReportLayoutState(state);
-    $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
-    renderCustomizePanel(state);
-    updateReportNarrativeMeta(state);
-    renderReportData(state);
-    refreshOptimaFilter(state);
+    applyReportDataPayload(state, report, payload);
   } catch (error) {
-    state.reportHeaders = [];
-    state.reportRows = [];
-    state.reportRawRows = [];
-    state.reportNotes = [];
-    state.reportSource = null;
-    clearOptimaFilterState(state);
-    state.reportDataStatus = "error";
-    state.reportDataError = error.message;
-    state.reportDataKey = report.key;
-    renderReportData(state);
+    applyReportDataError(state, report, error);
   }
+}
+
+function buildReportDataRequest(report) {
+  return {
+    report: report.queryKey,
+    report_title: report.title,
+    module: report.primaryModule,
+    server: $("#sqlServer").value.trim(),
+    database: $("#sqlDatabase").value.trim(),
+    ...getTimeFilterPayload(),
+  };
+}
+
+function applyReportDataPayload(state, report, payload) {
+  state.reportHeaders = payload.headers || [];
+  state.reportRawRows = payload.rows || [];
+  state.reportRows = filterReportRows(state, state.reportRawRows);
+  state.reportNotes = payload.notes || [];
+  state.reportSource = payload.source || null;
+  setOptimaFilterLoading(state);
+  state.reportDataStatus = "ready";
+  state.reportDataKey = report.key;
+  renderReportFilterControls(report, state);
+  syncReportLayoutState(state);
+  $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
+  renderCustomizePanel(state);
+  updateReportNarrativeMeta(state);
+  renderReportData(state);
+  refreshOptimaFilter(state);
+}
+
+function applyReportDataError(state, report, error) {
+  state.reportHeaders = [];
+  state.reportRows = [];
+  state.reportRawRows = [];
+  state.reportNotes = [];
+  state.reportSource = null;
+  clearOptimaFilterState(state);
+  state.reportDataStatus = "error";
+  state.reportDataError = error.message;
+  state.reportDataKey = report.key;
+  renderReportData(state);
 }
 
 function clearReportData(state) {
@@ -1613,10 +1687,14 @@ function availableDataCard(item, report) {
 }
 
 function updateBadges(state) {
-  const databaseName = $("#sqlDatabase").value.trim() || "Brak podłączonej bazy";
+  const connectedDatabase = $("#sqlDatabase").value.trim();
+  const databaseName = connectedDatabase || "Brak podłączonej bazy";
   const report = getCurrentReport(state);
   const view = state.currentView || "start";
+  const topbarDb = document.querySelector(".topbar-db");
   $("#connectedDatabaseName").textContent = databaseName;
+  topbarDb?.classList.toggle("is-connected", Boolean(connectedDatabase));
+  topbarDb?.classList.toggle("is-disconnected", !connectedDatabase);
   if (view === "communication") {
     $("#viewSubtitle").textContent = "Podłącz backup SQL i sprawdź listę pewnych danych wykrytych w bazie.";
     return;
@@ -1730,7 +1808,13 @@ function renderStartFavorites(state) {
     : "Brak ulubionych raportów";
   $("#startFavorites").innerHTML = favorites.length
     ? favorites.map((report) => startFavoriteCard(report)).join("")
-    : '<div class="available-card is-empty">Dodaj raport do ulubionych, a pojawi się tutaj jako szybki skrót.</div>';
+    : `
+      <article class="start-empty-state">
+        <span class="meta-label">START</span>
+        <strong>Nie masz jeszcze ulubionych raportów</strong>
+        <p>Otwórz dowolny raport i kliknij gwiazdkę obok jego nazwy.</p>
+        <span class="start-empty-hint">Tu będą się pojawiały Twoje szybkie skróty.</span>
+      </article>`;
 }
 
 function renderAdministration(state) {
@@ -2083,49 +2167,57 @@ function renderReportData(state) {
   $("#refreshReportData").disabled = !$("#sqlDatabase").value.trim() || status === "loading";
 
   if (!$("#sqlDatabase").value.trim()) {
-    $("#reportDataMeta").textContent = "Podłącz bazę, żeby zobaczyć konkretne dokumenty z raportu.";
-    renderReportTable([], [], "Najpierw podłącz bazę SQL.");
-    renderReportActions(state);
-    renderOptimaFilter(state);
-    renderReportChart(state);
+    renderReportDataPlaceholder(
+      state,
+      "Podłącz bazę, żeby zobaczyć konkretne dokumenty z raportu.",
+      "Najpierw podłącz bazę SQL.",
+    );
     return;
   }
   if (status === "loading") {
-    $("#reportDataMeta").textContent = `Pobieram wyniki raportu „${report.title}” dla filtra: ${describeTimeFilter()}.`;
-    renderReportTable([], [], "Pobieram dane z SQL...");
-    renderReportActions(state);
-    renderOptimaFilter(state);
-    renderReportChart(state);
+    renderReportDataPlaceholder(
+      state,
+      `Pobieram wyniki raportu „${report.title}” dla filtra: ${describeTimeFilter()}.`,
+      "Pobieram dane z SQL...",
+    );
     return;
   }
   if (status === "error" && rowsBelongToReport) {
-    $("#reportDataMeta").textContent = `Błąd pobierania raportu: ${state.reportDataError || "nieznany błąd"}`;
-    renderReportTable([], [], "Nie udało się pobrać wyników raportu.");
-    renderReportActions(state);
-    renderOptimaFilter(state);
-    renderReportChart(state);
+    renderReportDataPlaceholder(
+      state,
+      `Błąd pobierania raportu: ${state.reportDataError || "nieznany błąd"}`,
+      "Nie udało się pobrać wyników raportu.",
+    );
     return;
   }
   if (!rowsBelongToReport) {
-    $("#reportDataMeta").textContent = "Raport ma aktywne połączenie do SQL i czeka na załadowanie wyników.";
-    renderReportTable([], [], "Kliknij „Odśwież wyniki”, żeby pobrać dane.");
-    renderReportActions(state);
-    renderOptimaFilter(state);
-    renderReportChart(state);
+    renderReportDataPlaceholder(
+      state,
+      "Raport ma aktywne połączenie do SQL i czeka na załadowanie wyników.",
+      "Kliknij „Odśwież wyniki”, żeby pobrać dane.",
+    );
     return;
   }
 
-  const sourceLabel = state.reportSource?.module ? ` źródło: ${moduleLabel(state.reportSource.module)}.` : "";
-  $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
+  $("#reportDataMeta").textContent = buildReportDataMeta(report, state);
   updateReportFilterMeta(state);
   renderReportTable(
     visibleHeaders,
     state.reportRows,
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
   );
-  renderReportActions(state);
-  renderOptimaFilter(state);
-  renderReportChart(state);
+  renderReportCompanionPanels(state);
+}
+
+function renderReportDataPlaceholder(state, metaText, emptyMessage) {
+  $("#reportDataMeta").textContent = metaText;
+  renderReportTable([], [], emptyMessage);
+  renderReportCompanionPanels(state);
+}
+
+function buildReportDataMeta(report, state) {
+  const sourceLabel = state.reportSource?.module ? ` źródło: ${moduleLabel(state.reportSource.module)}.` : "";
+  return `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
 }
 
 function renderReportTable(headers, rows, emptyMessage) {
@@ -2137,14 +2229,24 @@ function renderReportTable(headers, rows, emptyMessage) {
     : `<tr><td class="empty" colspan="${Math.max(headers.length, 1)}">${escapeHtml(emptyMessage)}</td></tr>`;
 }
 
+function renderReportCompanionPanels(state) {
+  renderReportActions(state);
+  renderOptimaFilter(state);
+  renderReportChart(state);
+}
+
 function renderReportActions(state) {
   const report = getCurrentReport(state);
   const hasData = state.reportDataKey === report.key && state.reportRows.length > 0;
   const isFavorite = (state.favoriteReports || []).includes(report.key);
   const visibleHeaders = getVisibleReportHeaders(state);
 
-  $("#toggleFavoriteReport").textContent = isFavorite ? "Usuń z ulubionych" : "Dodaj do ulubionych";
-  $("#toggleFavoriteReport").classList.toggle("is-active", isFavorite);
+  const favoriteButton = $("#toggleFavoriteReport");
+  favoriteButton.innerHTML = `<span aria-hidden="true">${isFavorite ? "★" : "☆"}</span>`;
+  favoriteButton.classList.toggle("is-active", isFavorite);
+  favoriteButton.setAttribute("aria-pressed", String(isFavorite));
+  favoriteButton.setAttribute("aria-label", isFavorite ? "Usuń raport z ulubionych" : "Dodaj raport do ulubionych");
+  favoriteButton.title = isFavorite ? "Usuń raport z ulubionych" : "Dodaj raport do ulubionych";
   $("#toggleReportChart").textContent = state.reportChartEnabled ? "Ukryj wykres" : "Włącz wykres";
   $("#toggleReportChart").disabled = !hasData;
   $("#exportExcelTable").disabled = !$("#sqlDatabase").value.trim();
@@ -2648,9 +2750,7 @@ function reportFilterControl(filter, state) {
 function applyReportSpecificFilters(state) {
   rememberReportFilterValues(state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
-  state.reportOptimaFilter = null;
-  state.reportOptimaFilterStatus = "loading";
-  state.reportOptimaFilterError = "";
+  setOptimaFilterLoading(state);
   renderReportData(state);
   refreshOptimaFilter(state);
 }
@@ -2659,9 +2759,7 @@ function clearReportSpecificFilters(state) {
   state.reportFilterValues = {};
   renderReportFilterControls(getCurrentReport(state), state);
   state.reportRows = filterReportRows(state, state.reportRawRows || []);
-  state.reportOptimaFilter = null;
-  state.reportOptimaFilterStatus = "loading";
-  state.reportOptimaFilterError = "";
+  setOptimaFilterLoading(state);
   renderReportData(state);
   refreshOptimaFilter(state);
 }
@@ -2834,6 +2932,12 @@ function moduleCount(code, modules) {
 function clearOptimaFilterState(state) {
   state.reportOptimaFilter = null;
   state.reportOptimaFilterStatus = "idle";
+  state.reportOptimaFilterError = "";
+}
+
+function setOptimaFilterLoading(state) {
+  state.reportOptimaFilter = null;
+  state.reportOptimaFilterStatus = "loading";
   state.reportOptimaFilterError = "";
 }
 

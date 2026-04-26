@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import src.connectors.optima_backup as optima_backup
 import serve
-from src.connectors.optima_backup import sanitize_identifier, scan_backup_files, suggest_database_name
+from src.connectors.optima_backup import pick_backup_file, sanitize_identifier, scan_backup_files, suggest_database_name
 from src.connectors.optima_data_catalog import build_available_data_sql, build_module_query
 
 
@@ -45,6 +45,23 @@ def test_scan_backup_files_accepts_direct_file_root(tmp_path):
     found = scan_backup_files([str(backup)])
 
     assert any(item["name"] == "firma.bak" for item in found)
+
+
+def test_pick_backup_file_uses_parent_directory_of_existing_file(tmp_path, monkeypatch):
+    backup = tmp_path / "firma.bak"
+    backup.write_bytes(b"backup")
+    captured = {}
+
+    def fake_picker(initial_dir):
+        captured["initial_dir"] = initial_dir
+        return str(backup)
+
+    monkeypatch.setattr(optima_backup, "_ask_backup_filename", fake_picker)
+
+    selected = pick_backup_file(str(backup))
+
+    assert selected == str(backup)
+    assert captured["initial_dir"] == str(tmp_path)
 
 
 def test_available_data_sql_contains_core_modules():

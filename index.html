@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Optima SQL GUI</title>
-  <link rel="stylesheet" href="web/styles.css?v=20260426-admin-only">
+  <link rel="stylesheet" href="web/styles.css?v=20260426-topbar-status">
 </head>
 <body>
   <div class="app-shell">
@@ -68,38 +68,11 @@
       </header>
 
       <section id="viewStart" class="app-view start-view is-active" aria-labelledby="startTitle">
-        <section class="panel start-hero">
-          <span class="eyebrow">START</span>
-          <h3 id="startTitle">Strona startowa</h3>
-          <p>
-            Ten widok jest punktem wejścia: najpierw komunikacja z bazą, potem raporty nadrzędne,
-            paczki zamknięcia oraz schematy i dekretacja.
-          </p>
-        </section>
-
-        <section class="start-grid" aria-label="Skróty startowe">
-          <article class="start-card">
-            <span class="meta-label">Krok 1</span>
-            <strong>Komunikacja</strong>
-            <p>Podłącz backup SQL i sprawdź, jakie pewne dane wykryliśmy w bazie.</p>
-          </article>
-          <article class="start-card">
-            <span class="meta-label">Krok 2</span>
-            <strong>Dashboardy nadrzędne</strong>
-            <p>Zobacz status paczek, blokady, VAT, KSeF, bank i obraz zarządczy.</p>
-          </article>
-          <article class="start-card">
-            <span class="meta-label">Krok 3</span>
-            <strong>Schematy i dekretacja</strong>
-            <p>Przejdź do kontroli automatyzacji księgowań i ręcznych dekretów.</p>
-          </article>
-        </section>
-
         <section class="panel">
           <div class="panel-head">
             <div>
               <span class="eyebrow">START</span>
-              <h3>Ulubione raporty</h3>
+              <h3 id="startTitle">Ulubione raporty</h3>
             </div>
             <span id="startFavoritesMeta" class="muted">Brak ulubionych raportów</span>
           </div>
@@ -120,20 +93,20 @@
               <span class="muted">read-only</span>
             </div>
             <p class="disclaimer">
-              Wskaż katalog z backupem .BAK/.BAC, kliknij „Wgraj plik”, a potem „Podłącz”.
+              Kliknij „Wgraj plik”, wybierz backup .BAK/.BAC z Eksploratora Windows, a potem „Podłącz”.
               Program odtwarza lokalną kopię read-only bez zapisu do Optimy.
             </p>
             <div class="connection-form">
-              <label for="backupDirectory">Wgraj plik</label>
-              <input id="backupDirectory" type="text" value="F:\" placeholder="Wskaż katalog, np. F:\" aria-label="Katalog z backupem SQL">
+              <label for="backupPathDisplay">Plik backupu</label>
+              <input id="backupPathDisplay" type="text" value="" placeholder="Kliknij „Wgraj plik” i wybierz backup .BAK/.BAC" aria-label="Wybrany plik backupu SQL" readonly>
               <input id="backupPath" type="hidden">
               <input id="sqlServer" type="hidden" value=".\SQLEXPRESS02">
               <input id="sqlDatabase" type="hidden" value="">
               <button id="scanBackups" class="plain-button" type="button">Wgraj plik</button>
               <button id="connectBackup" class="primary-button" type="button" disabled>Podłącz</button>
             </div>
-            <div class="file-meta" id="backupMeta">Status: wskaż katalog z plikiem .BAK/.BAC.</div>
-            <div id="backupInfo" class="connection-status" hidden>Status: oczekuję na wskazanie katalogu.</div>
+            <div class="file-meta" id="backupMeta">Status: wybierz plik .BAK/.BAC.</div>
+            <div id="backupInfo" class="connection-status">Status: oczekuję na wybór pliku backupu.</div>
           </section>
 
           <section class="panel">
@@ -300,16 +273,28 @@
         </section>
       </section>
 
-      <section id="viewReport" class="app-view report-shell" aria-labelledby="reportTitle">
-        <section class="panel report-hero">
-          <div class="panel-head report-hero-head">
-            <div>
-              <span class="eyebrow" id="reportSection">Paczki i zamknięcie</span>
-              <h3 id="reportTitle">Status paczki danych</h3>
-              <p class="report-summary" id="reportSummary">Pierwszy raport po imporcie, który pokazuje kompletność paczki, liczbę dokumentów, błędy oraz gotowość do zamknięcia miesiąca.</p>
+        <section id="viewReport" class="app-view report-shell" aria-labelledby="reportTitle">
+          <section class="panel report-hero">
+            <div class="panel-head report-hero-head">
+              <div>
+                <span class="eyebrow" id="reportSection">Paczki i zamknięcie</span>
+                <div class="report-title-row">
+                  <h3 id="reportTitle">Status paczki danych</h3>
+                  <button
+                    id="toggleFavoriteReport"
+                    class="report-favorite-button"
+                    type="button"
+                    aria-pressed="false"
+                    aria-label="Dodaj raport do ulubionych"
+                    title="Dodaj raport do ulubionych"
+                  >
+                    <span aria-hidden="true">☆</span>
+                  </button>
+                </div>
+                <p class="report-summary" id="reportSummary">Pierwszy raport po imporcie, który pokazuje kompletność paczki, liczbę dokumentów, błędy oraz gotowość do zamknięcia miesiąca.</p>
+              </div>
+              <div class="report-priority" id="reportPriority">Priorytet: krytyczny</div>
             </div>
-            <div class="report-priority" id="reportPriority">Priorytet: krytyczny</div>
-          </div>
           <div class="report-meta-grid">
             <div class="report-meta-card">
               <span class="meta-label">Pytanie biznesowe</span>
@@ -340,11 +325,10 @@
           <div class="panel-head">
             <div>
               <h3>Akcje raportu</h3>
-              <span id="reportActionMeta" class="muted">SQL, wykresy, eksport i ulubione dla aktywnego raportu.</span>
+              <span id="reportActionMeta" class="muted">SQL, wykresy i eksport dla aktywnego raportu.</span>
             </div>
           </div>
           <div class="report-actions-grid">
-            <button id="toggleFavoriteReport" class="plain-button" type="button">Dodaj do ulubionych</button>
             <button id="toggleReportChart" class="plain-button" type="button">Włącz wykres</button>
             <button id="exportExcelTable" class="plain-button" type="button">Excel: tabela</button>
             <button id="exportExcelChart" class="plain-button" type="button">Excel: tabela + wykres</button>
@@ -431,6 +415,7 @@
     </main>
   </div>
 
-  <script type="module" src="web/app.js?v=20260426-report-customize"></script>
+  <script type="module" src="web/app.js?v=20260426-topbar-status"></script>
 </body>
 </html>
+
