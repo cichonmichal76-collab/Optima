@@ -402,6 +402,7 @@ const REPORT_GROUPS = [
         summary: "Lista dokumentów mających schemat, ale bez wygenerowanego dekretu.",
         question: "Dlaczego schemat jest przypisany, ale nie wygenerował księgowania?",
         priority: "Krytyczny",
+        queryKey: "scheme-without-entry",
         sources: ["Optima"],
         filters: ["Okres od-do", "Typ dokumentu", "Schemat", "Status księgowy", "Status schematu"],
         tags: ["schemat bez dekretu", "błąd procesu", "dekretacja"],

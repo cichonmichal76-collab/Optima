@@ -64,6 +64,25 @@ def test_documents_action_report_exposes_explicit_action_flags():
     assert query.notes
 
 
+def test_scheme_without_entry_report_exposes_explicit_scheme_flags():
+    query = build_report_query("scheme-without-entry", "202603")
+
+    assert "CDN.VatNag AS v" in query.sql
+    assert "CDN.DokDefinicje AS ddf" in query.sql
+    assert "VaN_IdentKsiegDDfID" in query.sql
+    assert "DDf_ImportSchematID" in query.sql
+    assert "DDf_Nieaktywna" in query.sql
+    assert "[__flag_schemat_nieaktywny_lub_nieuruchomiony]" in query.sql
+    assert "[__flag_brak_konta_ksiegowego_konta_vat_konta_rozrachunkowego_lub_kategorii]" in query.sql
+    assert "[__flag_dokument_w_buforze_niezatwierdzony_lub_poza_warunkami_schematu]" in query.sql
+    assert "[__flag_schemat_nieaktywny]" in query.sql
+    assert "[__flag_brak_konta_vat]" in query.sql
+    assert "[__flag_brak_konta_rozrachunkowego]" in query.sql
+    assert "v.VaN_DataWys >= '2026-03-01'" in query.sql
+    assert "FROM CDN.DekretyNag AS n" in query.sql
+    assert query.notes
+
+
 def test_manual_entries_report_finds_entries_without_scheme():
     query = build_report_query("manual-entries", "202603")
 
@@ -224,6 +243,30 @@ def test_report_data_uses_explicit_documents_action_query(monkeypatch):
     assert payload["rows"] == [{"Priorytet": "Krytyczny", "Dokument": "FS/1/03/2026"}]
     assert payload["source"]["source_type"] == "report"
     assert payload["source"]["report"] == "documents-action"
+
+
+def test_report_data_uses_explicit_scheme_without_entry_query(monkeypatch):
+    def fake_run_sqlcmd_table(sql, config):
+        assert "PendingSchemeEntries" in sql
+        assert "[Schemat]" in sql
+        assert config.database == "OptimaAudit_Test"
+        return ["Numer", "Status"], [{"Numer": "FS/1/03/2026", "Status": "Schemat nieaktywny"}]
+
+    monkeypatch.setattr(serve, "run_sqlcmd_table", fake_run_sqlcmd_table)
+
+    payload = serve.report_data(
+        {
+            "report": "scheme-without-entry",
+            "report_title": "Schemat ze wskazaniem, ale bez dekretu",
+            "module": "LEDGER",
+            "database": "OptimaAudit_Test",
+            "allowed_years": ["2026"],
+        }
+    )
+
+    assert payload["rows"] == [{"Numer": "FS/1/03/2026", "Status": "Schemat nieaktywny"}]
+    assert payload["source"]["source_type"] == "report"
+    assert payload["source"]["report"] == "scheme-without-entry"
 
 
 def test_report_data_defaults_to_selected_import_year(monkeypatch):

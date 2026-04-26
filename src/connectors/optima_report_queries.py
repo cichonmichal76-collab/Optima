@@ -26,6 +26,8 @@ def build_report_query(
         return _build_closing_blockers_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "documents-action":
         return _build_documents_action_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    if report_key == "scheme-without-entry":
+        return _build_scheme_without_entry_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "documents-without-scheme":
         return _build_documents_without_scheme_report(period_yyyymm, year=year, date_from=date_from, date_to=date_to)
     if report_key == "manual-entries":
@@ -806,6 +808,116 @@ ORDER BY
             "Raport dziennej kolejki pracy ksiegowej jest budowany jawnie z dokumentow obiegu, VAT sprzedazy i zapisow bankowych.",
             "Priorytet krytyczny obejmuje brak schematu z brakiem dekretu oraz faktury sprzedazy bez numeru KSeF.",
             "Wysoki priorytet pokazuje nierozliczone platnosci bankowe bez jednoznacznego rozpoznania, a sredni braki MPK i opisu merytorycznego.",
+        ),
+    )
+
+
+def _build_scheme_without_entry_report(
+    period_yyyymm: int | str | None,
+    *,
+    year: int | str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> OptimaReportQuery:
+    vat_where = _period_where("v.VaN_DataWys", period_yyyymm, year=year, date_from=date_from, date_to=date_to)
+    sql = f"""
+SET NOCOUNT ON;
+WITH VatPozycje AS (
+    SELECT
+        VaT_VaNID,
+        SUM(VaT_NettoDoVAT) AS NettoDoVAT,
+        SUM(VaT_VATDoVAT) AS VATDoVAT,
+        CASE WHEN SUM(CASE WHEN VaT_Stawka IS NOT NULL THEN 1 ELSE 0 END) > 0 THEN 1 ELSE 0 END AS VatRateAvailable
+    FROM CDN.VatTab
+    GROUP BY VaT_VaNID
+),
+PendingSchemeEntries AS (
+    SELECT
+        CONVERT(varchar(10), v.VaN_DataWys, 23) AS [Data],
+        COALESCE(NULLIF(ddf.DDf_Symbol, ''), NULLIF(v.VaN_Rejestr, ''), N'VAT') AS [Typ],
+        v.VaN_Dokument AS [Numer],
+        NULLIF(LTRIM(RTRIM(CONCAT(v.VaN_KntNazwa1, ' ', v.VaN_KntNazwa2, ' ', v.VaN_KntNazwa3))), '') AS [Kontrahent],
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(CONCAT(ddf.DDf_Symbol, N' - ', ddf.DDf_Nazwa))), ''),
+            NULLIF(LTRIM(RTRIM(v.VaN_IdentKsiegNumeracja)), ''),
+            NULLIF(LTRIM(RTRIM(v.VaN_IdentKsieg)), ''),
+            N'Wskazanie schematu'
+        ) AS [Schemat],
+        CAST(COALESCE(p.NettoDoVAT + p.VATDoVAT, v.VaN_RazemBrutto, 0) AS decimal(18, 2)) AS [Brutto],
+        CASE
+            WHEN COALESCE(tra.TrN_Bufor, 0) <> 0 THEN N'Bufor'
+            WHEN COALESCE(ddf.DDf_Nieaktywna, 0) <> 0 THEN N'Schemat nieaktywny'
+            WHEN COALESCE(ddf.DDf_ImportSchematID, 0) = 0 THEN N'Schemat nieuruchomiony'
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_KntKonto, ''))), '') IS NULL THEN N'Brak konta rozrachunkowego'
+            WHEN COALESCE(p.VATDoVAT, 0) <> 0 AND COALESCE(p.VatRateAvailable, 0) = 0 THEN N'Brak konta VAT'
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_Kategoria, ''))), '') IS NULL THEN N'Brak kategorii'
+            ELSE N'Do weryfikacji'
+        END AS [Status],
+        CASE
+            WHEN COALESCE(ddf.DDf_Nieaktywna, 0) <> 0 THEN N'Schemat nieaktywny.'
+            WHEN COALESCE(ddf.DDf_ImportSchematID, 0) = 0 THEN N'Schemat nieaktywny lub nieuruchomiony.'
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_KntKonto, ''))), '') IS NULL THEN N'Brak konta rozrachunkowego.'
+            WHEN COALESCE(p.VATDoVAT, 0) <> 0 AND COALESCE(p.VatRateAvailable, 0) = 0 THEN N'Brak konta VAT.'
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_Kategoria, ''))), '') IS NULL THEN N'Brak konta księgowego, konta VAT, konta rozrachunkowego lub kategorii.'
+            WHEN COALESCE(tra.TrN_Bufor, 0) <> 0 OR NULLIF(LTRIM(RTRIM(COALESCE(tra.TrN_StatusString, ''))), '') <> N'zatwierdzony'
+                THEN N'Dokument w buforze, niezatwierdzony lub poza warunkami schematu.'
+            ELSE N'Dokument w buforze, niezatwierdzony lub poza warunkami schematu.'
+        END AS [Możliwa przyczyna],
+        CASE WHEN COALESCE(ddf.DDf_Nieaktywna, 0) <> 0 OR COALESCE(ddf.DDf_ImportSchematID, 0) = 0 THEN '1' ELSE '0' END AS [__flag_schemat_nieaktywny_lub_nieuruchomiony],
+        CASE
+            WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_KntKonto, ''))), '') IS NULL
+              OR (COALESCE(p.VATDoVAT, 0) <> 0 AND COALESCE(p.VatRateAvailable, 0) = 0)
+              OR NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_Kategoria, ''))), '') IS NULL
+            THEN '1'
+            ELSE '0'
+        END AS [__flag_brak_konta_ksiegowego_konta_vat_konta_rozrachunkowego_lub_kategorii],
+        CASE
+            WHEN COALESCE(tra.TrN_Bufor, 0) <> 0
+              OR NULLIF(LTRIM(RTRIM(COALESCE(tra.TrN_StatusString, ''))), '') <> N'zatwierdzony'
+              OR (
+                COALESCE(ddf.DDf_Nieaktywna, 0) = 0
+                AND COALESCE(ddf.DDf_ImportSchematID, 0) <> 0
+                AND NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_KntKonto, ''))), '') IS NOT NULL
+                AND NOT (COALESCE(p.VATDoVAT, 0) <> 0 AND COALESCE(p.VatRateAvailable, 0) = 0)
+                AND NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_Kategoria, ''))), '') IS NOT NULL
+              )
+            THEN '1'
+            ELSE '0'
+        END AS [__flag_dokument_w_buforze_niezatwierdzony_lub_poza_warunkami_schematu],
+        CASE WHEN COALESCE(ddf.DDf_Nieaktywna, 0) <> 0 THEN '1' ELSE '0' END AS [__flag_schemat_nieaktywny],
+        CASE WHEN COALESCE(p.VATDoVAT, 0) <> 0 AND COALESCE(p.VatRateAvailable, 0) = 0 THEN '1' ELSE '0' END AS [__flag_brak_konta_vat],
+        CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_KntKonto, ''))), '') IS NULL THEN '1' ELSE '0' END AS [__flag_brak_konta_rozrachunkowego]
+    FROM CDN.VatNag AS v
+    LEFT JOIN VatPozycje AS p ON p.VaT_VaNID = v.VaN_VaNID
+    LEFT JOIN CDN.DokDefinicje AS ddf ON ddf.DDf_DDfID = v.VaN_IdentKsiegDDfID
+    OUTER APPLY (
+        SELECT TOP (1)
+            tr.TrN_TrNID,
+            tr.TrN_Bufor,
+            LOWER(NULLIF(LTRIM(RTRIM(COALESCE(tr.TrN_StatusString, ''))), '')) AS TrN_StatusString
+        FROM CDN.TraNag AS tr
+        WHERE tr.TrN_DnpID = v.VaN_DnpID
+        ORDER BY tr.TrN_TrNID DESC
+    ) AS tra
+    WHERE NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_IdentKsieg, ''))), '') IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM CDN.DekretyNag AS n
+          WHERE NULLIF(LTRIM(RTRIM(COALESCE(n.DeN_IdentKsieg, ''))), '') = NULLIF(LTRIM(RTRIM(COALESCE(v.VaN_IdentKsieg, ''))), '')
+      )
+      {vat_where.replace("WHERE ", "AND ", 1)}
+)
+SELECT *
+FROM PendingSchemeEntries
+ORDER BY [Data] DESC, [Numer];
+""".strip()
+    return OptimaReportQuery(
+        report_key="scheme-without-entry",
+        sql=sql,
+        notes=(
+            "Raport jest budowany jawnie z CDN.VatNag, CDN.VatTab i CDN.DokDefinicje dla dokumentow z identyfikatorem ksiegowym, ale bez odpowiadajacego dekretu.",
+            "Wskazanie schematu opiera sie na VaN_IdentKsieg, VaN_IdentKsiegDDfID oraz definicji dokumentu DDf_ImportSchematID / DDf_Nieaktywna.",
+            "Brak konta VAT jest wykrywany konserwatywnie dla pozycji z kwota VAT, ale bez kompletnej konfiguracji pozycji VAT, a brak konta rozrachunkowego po VaN_KntKonto.",
         ),
     )
 
