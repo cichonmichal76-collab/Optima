@@ -2769,7 +2769,7 @@ function renderSpecialReportLayout(state, report, rows, emptyMessage) {
   panel.hidden = false;
 
   if (report.key === "buildings") {
-    panel.innerHTML = renderBuildingsPrintLayout(rows, emptyMessage);
+    panel.innerHTML = renderBuildingsPrintLayout(rows, emptyMessage, state);
     return;
   }
 
@@ -2811,7 +2811,7 @@ function reportUsesSpecialLayout(report) {
   return Boolean(report && REPORTS_WITH_SPECIAL_LAYOUT.has(report.key));
 }
 
-function renderBuildingsPrintLayout(rows, emptyMessage) {
+function renderBuildingsPrintLayout(rows, emptyMessage, state) {
   if (!rows.length) {
     return `<div class="available-card is-empty">${escapeHtml(emptyMessage)}</div>`;
   }
@@ -2827,31 +2827,14 @@ function renderBuildingsPrintLayout(rows, emptyMessage) {
     <div class="buildings-report">
       ${[...grouped.entries()]
         .sort((left, right) => left[0].localeCompare(right[0], "pl"))
-        .map(([building, buildingRows]) => buildingsSectionMarkup(building, buildingRows))
+        .map(([building, buildingRows]) => buildingsSectionMarkup(building, buildingRows, state))
         .join("")}
     </div>`;
 }
 
-function buildingsSectionMarkup(building, rows) {
-  const orderedRows = [...rows].sort(compareBuildingsRows);
-  const totals = orderedRows.reduce((acc, row) => {
-    acc.przychody += coerceChartNumber(row["Przychody"]) || 0;
-    acc.podwykonawcy += coerceChartNumber(row["Podwykonawcy"]) || 0;
-    acc.spZoo += coerceChartNumber(row["SP. z o.o."]) || 0;
-    acc.material += coerceChartNumber(row["Materiał"]) || 0;
-    acc.wynagrodzenia += coerceChartNumber(row["Wynagrodzenia"]) || 0;
-    acc.koszty += coerceChartNumber(row["Koszty razem"]) || 0;
-    acc.zysk += coerceChartNumber(row["Zysk/Strata"]) || 0;
-    return acc;
-  }, {
-    przychody: 0,
-    podwykonawcy: 0,
-    spZoo: 0,
-    material: 0,
-    wynagrodzenia: 0,
-    koszty: 0,
-    zysk: 0,
-  });
+function buildingsSectionMarkup(building, rows, state) {
+  const displayRows = buildBuildingsDisplayRows(rows, state);
+  const totals = displayRows.reduce((acc, row) => accumulateBuildingsMetrics(acc, row.metrics), createBuildingsMetrics());
 
   return `
     <section class="buildings-section">
@@ -2871,7 +2854,7 @@ function buildingsSectionMarkup(building, rows) {
             </tr>
           </thead>
           <tbody>
-            ${orderedRows.map((row) => buildingsRowMarkup(row)).join("")}
+            ${displayRows.map((row) => buildingsSummaryRowMarkup(row)).join("")}
             <tr class="buildings-total-row">
               <td>RAZEM</td>
               <td>${escapeHtml(formatPolishAmount(totals.przychody))}</td>
@@ -2888,24 +2871,79 @@ function buildingsSectionMarkup(building, rows) {
     </section>`;
 }
 
-function buildingsRowMarkup(row) {
+function buildingsSummaryRowMarkup(row) {
+  const metrics = row.metrics || createBuildingsMetrics();
   return `
     <tr>
-      <td>${escapeHtml(buildingsMonthLabel(row))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Przychody"]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Podwykonawcy"]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["SP. z o.o."]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Materiał"]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Wynagrodzenia"]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Koszty razem"]))}</td>
-      <td>${escapeHtml(formatAmountValue(row["Zysk/Strata"]))}</td>
+      <td>${escapeHtml(row.label || "")}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.przychody))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.podwykonawcy))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.spZoo))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.material))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.wynagrodzenia))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.koszty))}</td>
+      <td>${escapeHtml(formatPolishAmount(metrics.zysk))}</td>
     </tr>`;
 }
 
-function buildingsMonthLabel(row) {
-  const month = canonicalMonthLabel(row["Miesiac"]);
-  const year = String(row["Rok"] || "").trim();
-  return year ? `${month} ${year}` : month;
+function buildBuildingsDisplayRows(rows, state) {
+  const orderedRows = [...rows].sort(compareBuildingsRows);
+  if (!orderedRows.length) return [];
+  const groupedByYear = new Map();
+  orderedRows.forEach((row) => {
+    const year = Number.parseInt(row["Rok"], 10);
+    if (!Number.isFinite(year)) return;
+    if (!groupedByYear.has(year)) groupedByYear.set(year, []);
+    groupedByYear.get(year).push(row);
+  });
+  const years = [...groupedByYear.keys()].sort((left, right) => left - right);
+  const activeYear = resolveBuildingsActiveYear(state, years);
+  const result = [];
+
+  years
+    .filter((year) => year < activeYear)
+    .forEach((year) => {
+      result.push({
+        label: String(year),
+        metrics: summarizeBuildingsRows(groupedByYear.get(year) || []),
+      });
+    });
+
+  if (groupedByYear.has(activeYear)) {
+    const currentRows = groupedByYear.get(activeYear) || [];
+    const beforeDecember = currentRows.filter((row) => monthIndexFromLabel(row["Miesiac"]) < 11);
+    const december = currentRows.filter((row) => monthIndexFromLabel(row["Miesiac"]) === 11);
+
+    if (beforeDecember.length) {
+      result.push({
+        label: `styczeń-listopad ${activeYear}`,
+        metrics: summarizeBuildingsRows(beforeDecember),
+      });
+    }
+    if (december.length) {
+      result.push({
+        label: `grudzień ${activeYear}`,
+        metrics: summarizeBuildingsRows(december),
+      });
+    }
+    if (!beforeDecember.length && !december.length) {
+      result.push({
+        label: String(activeYear),
+        metrics: summarizeBuildingsRows(currentRows),
+      });
+    }
+  }
+
+  years
+    .filter((year) => year > activeYear)
+    .forEach((year) => {
+      result.push({
+        label: String(year),
+        metrics: summarizeBuildingsRows(groupedByYear.get(year) || []),
+      });
+    });
+
+  return result.filter((row) => row.metrics && hasBuildingsMetrics(row.metrics));
 }
 
 function compareBuildingsRows(left, right) {
@@ -2928,6 +2966,63 @@ function canonicalMonthLabel(value) {
   const labels = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
   if (monthIndex >= 0) return labels[monthIndex];
   return String(value || "").trim();
+}
+
+function resolveBuildingsActiveYear(state, years) {
+  const explicitYear = Number.parseInt(String(state?.year || "").trim(), 10);
+  if (Number.isFinite(explicitYear) && years.includes(explicitYear)) return explicitYear;
+  const importYears = getSelectedImportYears(state).map((year) => Number.parseInt(String(year), 10)).filter(Number.isFinite);
+  const preferredYear = [...importYears].sort((left, right) => left - right).at(-1);
+  if (Number.isFinite(preferredYear) && years.includes(preferredYear)) return preferredYear;
+  return years[years.length - 1] || new Date().getFullYear();
+}
+
+function createBuildingsMetrics() {
+  return {
+    przychody: 0,
+    podwykonawcy: 0,
+    spZoo: 0,
+    material: 0,
+    wynagrodzenia: 0,
+    koszty: 0,
+    zysk: 0,
+  };
+}
+
+function accumulateBuildingsMetrics(target, metrics) {
+  target.przychody += metrics.przychody || 0;
+  target.podwykonawcy += metrics.podwykonawcy || 0;
+  target.spZoo += metrics.spZoo || 0;
+  target.material += metrics.material || 0;
+  target.wynagrodzenia += metrics.wynagrodzenia || 0;
+  target.koszty += metrics.koszty || 0;
+  target.zysk += metrics.zysk || 0;
+  return target;
+}
+
+function summarizeBuildingsRows(rows) {
+  return rows.reduce((acc, row) => {
+    acc.przychody += coerceChartNumber(row["Przychody"]) || 0;
+    acc.podwykonawcy += coerceChartNumber(row["Podwykonawcy"]) || 0;
+    acc.spZoo += coerceChartNumber(row["SP. z o.o."]) || 0;
+    acc.material += coerceChartNumber(row["Materiał"]) || 0;
+    acc.wynagrodzenia += coerceChartNumber(row["Wynagrodzenia"]) || 0;
+    acc.koszty += coerceChartNumber(row["Koszty razem"]) || 0;
+    acc.zysk += coerceChartNumber(row["Zysk/Strata"]) || 0;
+    return acc;
+  }, createBuildingsMetrics());
+}
+
+function hasBuildingsMetrics(metrics) {
+  return [
+    metrics.przychody,
+    metrics.podwykonawcy,
+    metrics.spZoo,
+    metrics.material,
+    metrics.wynagrodzenia,
+    metrics.koszty,
+    metrics.zysk,
+  ].some((value) => Math.abs(value || 0) > 0.0001);
 }
 
 function monthLabelsMap() {
