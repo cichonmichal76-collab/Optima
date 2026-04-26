@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Optima SQL GUI</title>
-  <link rel="stylesheet" href="web/styles.css?v=20260426-buildings-visible-filter-v1">
+  <link rel="stylesheet" href="web/styles.css?v=20260426-buildings-print-layout-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -433,7 +433,8 @@
               <button id="refreshReportData" class="plain-button" type="button">Odśwież wyniki</button>
             </div>
           </div>
-          <div class="table-wrap report-table-wrap">
+          <div id="reportSpecialContent" class="report-special-content" hidden></div>
+          <div id="reportTableWrap" class="table-wrap report-table-wrap">
             <table>
               <thead id="reportDataHead"></thead>
               <tbody id="reportDataRows">
@@ -465,7 +466,7 @@
     </main>
   </div>
 
-  <script type="module" src="web/app.js?v=20260426-buildings-visible-filter-v1"></script>
+  <script type="module" src="web/app.js?v=20260426-buildings-print-layout-v1"></script>
 </body>
 </html>
 

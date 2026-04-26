@@ -916,7 +916,7 @@ const REPORT_GROUPS = [
         queryKey: "buildings",
         sources: ["Optima", "Księga"],
         filters: ["Okres od-do", "Budowa", "Rok", "Miesiac", "Kwota od-do"],
-        visibleFilters: ["Budowa"],
+        visibleFilters: ["Budowa", "Rok", "Miesiac", "Kwota od-do"],
         tags: ["budowy", "marża", "przychody", "koszty"],
         primaryModule: "LEDGER",
         relatedModules: ["LEDGER", "ACCOUNT_PLAN"],
@@ -1106,18 +1106,8 @@ const SIMPLE_STACK_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const EMBEDDED_HEADER_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const SELECTION_FILTER_REPORTS = new Set(ALL_REPORT_KEYS);
 const REPORTS_WITH_VISIBLE_FILTER_PANEL = new Set(["buildings"]);
+const REPORTS_WITH_SPECIAL_LAYOUT = new Set(["buildings"]);
 const EMBEDDED_HEADER_FILTERS = {
-  buildings: [
-    { header: "Rok", filter: "Rok", type: "select", emptyLabel: "Wszystkie lata", headers: ["Rok"] },
-    { header: "Miesiac", filter: "Miesiac", type: "select", emptyLabel: "Wszystkie miesiące", headers: ["Miesiac"] },
-    { header: "Przychody", filter: "Przychody", type: "number-condition", headers: ["Przychody"] },
-    { header: "Podwykonawcy", filter: "Podwykonawcy", type: "number-condition", headers: ["Podwykonawcy"] },
-    { header: "SP. z o.o.", filter: "SP. z o.o.", type: "number-condition", headers: ["SP. z o.o."] },
-    { header: "Materiał", filter: "Materiał", type: "number-condition", headers: ["Materiał"] },
-    { header: "Wynagrodzenia", filter: "Wynagrodzenia", type: "number-condition", headers: ["Wynagrodzenia"] },
-    { header: "Koszty razem", filter: "Koszty razem", type: "number-condition", headers: ["Koszty razem"] },
-    { header: "Zysk/Strata", filter: "Zysk/Strata", type: "number-condition", headers: ["Zysk/Strata"] },
-  ],
   "documents-without-scheme": [
     { header: "Numer dokumentu", filter: "Numer dokumentu", type: "text", placeholder: "Szukaj", headers: ["Numer dokumentu"] },
     { header: "Numer obcy", filter: "Numer obcy", type: "text", placeholder: "Szukaj", headers: ["Numer obcy"] },
@@ -2720,7 +2710,7 @@ function renderReportData(state) {
 
   $("#reportDataMeta").textContent = buildReportDataMeta(report, state);
   updateReportFilterMeta(state);
-  renderReportTable(
+  renderReportRowsByLayout(
     state,
     visibleHeaders,
     state.reportRows,
@@ -2733,7 +2723,7 @@ function renderReportData(state) {
 function renderReportDataPlaceholder(state, metaText, emptyMessage) {
   const placeholderHeaders = getVisibleReportHeaders(state);
   $("#reportDataMeta").textContent = metaText;
-  renderReportTable(state, placeholderHeaders, [], emptyMessage);
+  renderReportRowsByLayout(state, placeholderHeaders, [], emptyMessage);
   renderReportFilterIndicator(state);
   renderReportCompanionPanels(state);
 }
@@ -2746,14 +2736,44 @@ function buildReportDataMeta(report, state) {
   return `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}${headerFilterLabel}`;
 }
 
-function renderReportTable(state, headers, rows, emptyMessage) {
+function renderReportRowsByLayout(state, headers, rows, emptyMessage) {
   const report = getCurrentReport(state);
+  if (reportUsesSpecialLayout(report)) {
+    renderSpecialReportLayout(state, report, rows, emptyMessage);
+    return;
+  }
+  renderStandardReportTable(state, report, headers, rows, emptyMessage);
+}
+
+function renderStandardReportTable(state, report, headers, rows, emptyMessage) {
+  $("#reportSpecialContent").hidden = true;
+  $("#reportSpecialContent").innerHTML = "";
+  $("#reportTableWrap").hidden = false;
+  renderReportTable(state, report, headers, rows, emptyMessage);
+}
+
+function renderReportTable(state, report, headers, rows, emptyMessage) {
   $("#reportDataHead").innerHTML = headers.length
     ? buildReportTableHead(report, state, headers)
     : "";
   $("#reportDataRows").innerHTML = rows.length
     ? rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
     : `<tr><td class="empty" colspan="${Math.max(headers.length, 1)}">${escapeHtml(emptyMessage)}</td></tr>`;
+}
+
+function renderSpecialReportLayout(state, report, rows, emptyMessage) {
+  $("#reportDataHead").innerHTML = "";
+  $("#reportDataRows").innerHTML = "";
+  $("#reportTableWrap").hidden = true;
+  const panel = $("#reportSpecialContent");
+  panel.hidden = false;
+
+  if (report.key === "buildings") {
+    panel.innerHTML = renderBuildingsPrintLayout(rows, emptyMessage);
+    return;
+  }
+
+  panel.innerHTML = `<div class="available-card is-empty">${escapeHtml(emptyMessage)}</div>`;
 }
 
 function buildReportTableHead(report, state, headers) {
@@ -2787,6 +2807,158 @@ function embeddedHeaderFiltersForReport(report, headers) {
   }));
 }
 
+function reportUsesSpecialLayout(report) {
+  return Boolean(report && REPORTS_WITH_SPECIAL_LAYOUT.has(report.key));
+}
+
+function renderBuildingsPrintLayout(rows, emptyMessage) {
+  if (!rows.length) {
+    return `<div class="available-card is-empty">${escapeHtml(emptyMessage)}</div>`;
+  }
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const key = String(row.Budowa || "").trim() || "Nieprzypisana budowa";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
+  });
+
+  return `
+    <div class="buildings-report">
+      ${[...grouped.entries()]
+        .sort((left, right) => left[0].localeCompare(right[0], "pl"))
+        .map(([building, buildingRows]) => buildingsSectionMarkup(building, buildingRows))
+        .join("")}
+    </div>`;
+}
+
+function buildingsSectionMarkup(building, rows) {
+  const orderedRows = [...rows].sort(compareBuildingsRows);
+  const totals = orderedRows.reduce((acc, row) => {
+    acc.przychody += coerceChartNumber(row["Przychody"]) || 0;
+    acc.podwykonawcy += coerceChartNumber(row["Podwykonawcy"]) || 0;
+    acc.spZoo += coerceChartNumber(row["SP. z o.o."]) || 0;
+    acc.material += coerceChartNumber(row["Materiał"]) || 0;
+    acc.wynagrodzenia += coerceChartNumber(row["Wynagrodzenia"]) || 0;
+    acc.koszty += coerceChartNumber(row["Koszty razem"]) || 0;
+    acc.zysk += coerceChartNumber(row["Zysk/Strata"]) || 0;
+    return acc;
+  }, {
+    przychody: 0,
+    podwykonawcy: 0,
+    spZoo: 0,
+    material: 0,
+    wynagrodzenia: 0,
+    koszty: 0,
+    zysk: 0,
+  });
+
+  return `
+    <section class="buildings-section">
+      <div class="buildings-section-title">${escapeHtml(building)}</div>
+      <div class="table-wrap buildings-table-wrap">
+        <table class="buildings-table">
+          <thead>
+            <tr>
+              <th>MIESIĄC</th>
+              <th>PRZYCHODY</th>
+              <th>PODWYKONAWCY</th>
+              <th>SP. Z O.O.</th>
+              <th>MATERIAŁ</th>
+              <th>WYNAGRODZENIA</th>
+              <th>KOSZTY RAZEM</th>
+              <th>ZYSK/STRATA</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orderedRows.map((row) => buildingsRowMarkup(row)).join("")}
+            <tr class="buildings-total-row">
+              <td>RAZEM</td>
+              <td>${escapeHtml(formatPolishAmount(totals.przychody))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.podwykonawcy))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.spZoo))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.material))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.wynagrodzenia))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.koszty))}</td>
+              <td>${escapeHtml(formatPolishAmount(totals.zysk))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>`;
+}
+
+function buildingsRowMarkup(row) {
+  return `
+    <tr>
+      <td>${escapeHtml(buildingsMonthLabel(row))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Przychody"]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Podwykonawcy"]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["SP. z o.o."]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Materiał"]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Wynagrodzenia"]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Koszty razem"]))}</td>
+      <td>${escapeHtml(formatAmountValue(row["Zysk/Strata"]))}</td>
+    </tr>`;
+}
+
+function buildingsMonthLabel(row) {
+  const month = canonicalMonthLabel(row["Miesiac"]);
+  const year = String(row["Rok"] || "").trim();
+  return year ? `${month} ${year}` : month;
+}
+
+function compareBuildingsRows(left, right) {
+  const leftYear = Number.parseInt(left["Rok"], 10) || 0;
+  const rightYear = Number.parseInt(right["Rok"], 10) || 0;
+  if (leftYear !== rightYear) return leftYear - rightYear;
+  return monthIndexFromLabel(left["Miesiac"]) - monthIndexFromLabel(right["Miesiac"]);
+}
+
+function monthIndexFromLabel(value) {
+  const normalized = normalizeText(value);
+  const months = monthLabelsMap();
+  const index = months.findIndex((month) => normalized.includes(month));
+  return index >= 0 ? index : 99;
+}
+
+function canonicalMonthLabel(value) {
+  const normalized = normalizeText(value);
+  const monthIndex = monthLabelsMap().findIndex((month) => normalized.includes(month));
+  const labels = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+  if (monthIndex >= 0) return labels[monthIndex];
+  return String(value || "").trim();
+}
+
+function monthLabelsMap() {
+  return [
+    "styczen",
+    "luty",
+    "marzec",
+    "kwiecien",
+    "maj",
+    "czerwiec",
+    "lipiec",
+    "sierpien",
+    "wrzesien",
+    "pazdziernik",
+    "listopad",
+    "grudzien",
+  ];
+}
+
+function formatAmountValue(value) {
+  const numeric = coerceChartNumber(value);
+  return numeric === null ? String(value ?? "") : formatPolishAmount(numeric);
+}
+
+function formatPolishAmount(value) {
+  return Number(value || 0).toLocaleString("pl-PL", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function defaultEmbeddedHeaderFilterType(header) {
   const normalized = normalizeText(header);
   const words = normalized.split(" ").filter(Boolean);
@@ -2798,7 +2970,7 @@ function defaultEmbeddedHeaderFilterType(header) {
   }
   if (words.includes("data") || (words.includes("termin") && !words.includes("dni")) || words.includes("okres")) return "date-condition";
   if (
-    ["status", "typ", "waluta", "obszar", "zrodlo", "magazyn", "powiazanie", "sekcja", "wlasciciel", "projekt", "mpk", "zadanie", "kontrahent", "dostawca"].some((part) => words.includes(part))
+    ["status", "typ", "waluta", "obszar", "zrodlo", "magazyn", "powiazanie", "sekcja", "wlasciciel", "projekt", "mpk", "zadanie", "kontrahent", "dostawca", "rok", "miesiac"].some((part) => words.includes(part))
   ) {
     return "select";
   }
@@ -2812,6 +2984,9 @@ function defaultEmbeddedHeaderEmptyLabel(header) {
   if (normalized.includes("waluta")) return "Wszystkie waluty";
   if (normalized.includes("kontrahent")) return "Wszyscy kontrahenci";
   if (normalized.includes("dostawca")) return "Wszyscy dostawcy";
+  if (normalized.includes("budowa")) return "Wszystkie budowy";
+  if (normalized.includes("rok")) return "Wszystkie lata";
+  if (normalized.includes("miesiac")) return "Wszystkie miesiące";
   if (normalized.includes("projekt")) return "Wszystkie projekty";
   if (normalized.includes("mpk")) return "Wszystkie MPK";
   return "Wszystkie";
@@ -3577,7 +3752,7 @@ function updateReportNarrativeMeta(state) {
 }
 
 function reportUsesEmbeddedHeaderFilters(report) {
-  return Boolean(report && EMBEDDED_HEADER_FILTER_REPORTS.has(report.key));
+  return Boolean(report && EMBEDDED_HEADER_FILTER_REPORTS.has(report.key) && !REPORTS_WITH_SPECIAL_LAYOUT.has(report.key));
 }
 
 function scoreHeaderAgainstFocus(header, text) {
@@ -3938,7 +4113,7 @@ function filterControlType(filter) {
   if (normalized.includes("okres") || normalized.includes("data") || normalized.includes("typ daty")) return "date-link";
   if (normalized.includes("kwota") || normalized.includes("suma") || normalized.includes("wartosc")) return "amount-range";
   if (normalized.includes("budowa")) return "multiselect";
-  if (normalized.includes("status") || normalized.includes("typ dokumentu") || normalized.includes("waluta") || normalized.includes("priorytet")) return "select";
+  if (normalized.includes("status") || normalized.includes("typ dokumentu") || normalized.includes("waluta") || normalized.includes("priorytet") || normalized.includes("rok") || normalized.includes("miesiac")) return "select";
   return "text";
 }
 

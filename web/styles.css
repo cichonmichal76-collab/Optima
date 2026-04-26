@@ -913,6 +913,66 @@ input[type="date"] {
   gap: 12px;
 }
 
+.report-special-content {
+  display: grid;
+  gap: 16px;
+}
+
+.buildings-report {
+  display: grid;
+  gap: 18px;
+}
+
+.buildings-section {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.buildings-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #20342d;
+}
+
+.buildings-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.buildings-table {
+  min-width: 980px;
+}
+
+.buildings-table th,
+.buildings-table td {
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.buildings-table th {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.buildings-table td:first-child,
+.buildings-table th:first-child {
+  min-width: 160px;
+}
+
+.buildings-total-row td {
+  font-weight: 800;
+  background: #f6fbf8;
+}
+
 .report-actions-panel,
 .report-customize-panel,
 .report-chart-panel,
