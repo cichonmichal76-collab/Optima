@@ -883,6 +883,57 @@ input[type="date"] {
   line-height: 1.45;
 }
 
+.stack-choice,
+.stack-layout-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.stack-choice {
+  cursor: pointer;
+}
+
+.stack-choice input,
+.stack-layout-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.stack-choice span,
+.stack-layout-toggle span {
+  line-height: 1.45;
+}
+
+.stack-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stack-layout-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.stack-layout-button {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.stack-layout-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .stack-item-control {
   border-left-color: var(--accent);
 }
@@ -1060,6 +1111,11 @@ pre {
   }
 
   .report-filter-field-range {
+    grid-template-columns: 1fr;
+  }
+
+  .stack-choice,
+  .stack-layout-row {
     grid-template-columns: 1fr;
   }
 

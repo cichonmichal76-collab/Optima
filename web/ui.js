@@ -959,6 +959,24 @@ function bindEvents(state) {
     $("#filterYear").focus();
     document.querySelector(".topbar")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  $("#reportControls").addEventListener("change", () => {
+    rememberControlSelections(state);
+    renderReportData(state);
+  });
+  $("#reportAlerts").addEventListener("change", () => {
+    rememberAlertSelections(state);
+    renderReportData(state);
+  });
+  $("#reportLayoutList").addEventListener("change", () => {
+    rememberColumnVisibility(state);
+    $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
+    renderReportData(state);
+  });
+  $("#reportLayoutList").addEventListener("click", (event) => {
+    const moveButton = event.target.closest("[data-layout-move]");
+    if (!moveButton) return;
+    moveReportColumn(state, moveButton.dataset.layoutColumn, moveButton.dataset.layoutMove);
+  });
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
     if (viewItem) {
@@ -1004,13 +1022,21 @@ function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
   state.currentView = "report";
   state.currentReportKey = reportKey;
-  state.reportFilterValues = {};
+  resetInteractiveReportState(state);
   clearReportData(state);
   renderSideMenu(state);
   renderCurrentView(state);
   renderActiveReport(state);
   updateBadges(state);
   loadActiveReportData(state);
+}
+
+function resetInteractiveReportState(state) {
+  state.reportFilterValues = {};
+  state.reportControlSelections = {};
+  state.reportAlertSelections = {};
+  state.reportColumnOrder = [];
+  state.reportHiddenColumns = {};
 }
 
 async function restoreKnownDatabase(state) {
@@ -1307,6 +1333,9 @@ async function loadActiveReportData(state) {
     state.reportDataStatus = "ready";
     state.reportDataKey = report.key;
     renderReportFilterControls(report, state);
+    syncReportLayoutState(state);
+    $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
+    updateReportNarrativeMeta(state);
     renderReportData(state);
   } catch (error) {
     state.reportHeaders = [];
@@ -1521,11 +1550,12 @@ function renderActiveReport(state) {
   renderReportFilterControls(report, state);
   $("#reportPriority").textContent = `Priorytet: ${report.priority.toLowerCase()}`;
   $("#reportPriority").dataset.priority = report.priority.toLowerCase();
-  $("#reportScopeMeta").textContent = `${report.controls.length} kontroli, ${report.layout.length} sekcji raportu`;
+  syncReportLayoutState(state);
+  updateReportNarrativeMeta(state);
   $("#reportTags").innerHTML = report.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
-  $("#reportControls").innerHTML = report.controls.map((item) => stackItem(item, "control")).join("");
-  $("#reportLayoutList").innerHTML = report.layout.map((item) => stackItem(item, "layout")).join("");
-  $("#reportAlerts").innerHTML = report.alerts.map((item) => stackItem(item, "alert")).join("");
+  $("#reportControls").innerHTML = renderSelectableStack(report.controls, state.reportControlSelections, "control");
+  $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
+  $("#reportAlerts").innerHTML = renderSelectableStack(report.alerts, state.reportAlertSelections, "alert");
   $("#reportMetrics").innerHTML = buildMetricCards(report, state).map(metricCard).join("");
   renderReportActions(state);
   renderReportData(state);
@@ -1537,6 +1567,7 @@ function renderReportData(state) {
   const report = getCurrentReport(state);
   const status = state.reportDataStatus;
   const rowsBelongToReport = state.reportDataKey === report.key;
+  const visibleHeaders = getVisibleReportHeaders(state);
   $("#refreshReportData").disabled = !$("#sqlDatabase").value.trim() || status === "loading";
 
   if (!$("#sqlDatabase").value.trim()) {
@@ -1572,7 +1603,7 @@ function renderReportData(state) {
   $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
   updateReportFilterMeta(state);
   renderReportTable(
-    state.reportHeaders,
+    visibleHeaders,
     state.reportRows,
     "Brak dokumentów spełniających warunek raportu w wybranym okresie.",
   );
@@ -1593,15 +1624,16 @@ function renderReportActions(state) {
   const report = getCurrentReport(state);
   const hasData = state.reportDataKey === report.key && state.reportRows.length > 0;
   const isFavorite = (state.favoriteReports || []).includes(report.key);
+  const visibleHeaders = getVisibleReportHeaders(state);
 
   $("#toggleFavoriteReport").textContent = isFavorite ? "Usuń z ulubionych" : "Dodaj do ulubionych";
   $("#toggleFavoriteReport").classList.toggle("is-active", isFavorite);
   $("#toggleReportChart").textContent = state.reportChartEnabled ? "Ukryj wykres" : "Włącz wykres";
   $("#toggleReportChart").disabled = !hasData;
   $("#exportExcelTable").disabled = !$("#sqlDatabase").value.trim();
-  $("#exportExcelChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(state.reportHeaders, state.reportRows);
+  $("#exportExcelChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(visibleHeaders, state.reportRows);
   $("#exportPdfTable").disabled = !$("#sqlDatabase").value.trim();
-  $("#exportPdfChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(state.reportHeaders, state.reportRows);
+  $("#exportPdfChart").disabled = !$("#sqlDatabase").value.trim() || !hasChartData(visibleHeaders, state.reportRows);
 
   const readyLabel = hasData
     ? `SQL aktywny, ${state.reportRows.length.toLocaleString("pl-PL")} wierszy gotowych do eksportu.`
@@ -1612,7 +1644,7 @@ function renderReportActions(state) {
 function renderReportChart(state) {
   const report = getCurrentReport(state);
   const hasRows = state.reportDataKey === report.key && state.reportRows.length > 0;
-  const chartModel = hasRows ? buildChartModel(state.reportHeaders, state.reportRows) : null;
+  const chartModel = hasRows ? buildChartModel(getVisibleReportHeaders(state), state.reportRows) : null;
   const panel = $("#reportChartPanel");
 
   panel.hidden = !state.reportChartEnabled;
@@ -1664,14 +1696,15 @@ function toggleReportChart(state) {
 
 async function exportActiveReport(state, format, includeChart) {
   const report = getCurrentReport(state);
-  const chartAllowed = includeChart && hasChartData(state.reportHeaders, state.reportRows);
+  const visibleHeaders = getVisibleReportHeaders(state);
+  const chartAllowed = includeChart && hasChartData(visibleHeaders, state.reportRows);
   const payload = {
     format,
     include_chart: chartAllowed,
     title: report.title,
     report_title: report.title,
     filter_label: describeTimeFilter(),
-    headers: state.reportHeaders,
+    headers: visibleHeaders,
     rows: state.reportDataKey === report.key ? state.reportRows : [],
     notes: [
       `Raport: ${report.title}`,
@@ -1784,6 +1817,169 @@ function stackItem(text, tone) {
     <article class="stack-item stack-item-${escapeHtml(tone)}">
       <span>${escapeHtml(text)}</span>
     </article>`;
+}
+
+function renderSelectableStack(items, selections, tone) {
+  return items.map((item, index) => {
+    const id = `${tone}-${index}`;
+    const checked = Boolean(selections?.[item]) ? " checked" : "";
+    return `
+      <label class="stack-choice stack-item stack-item-${escapeHtml(tone)}" for="${escapeHtml(id)}">
+        <input id="${escapeHtml(id)}" type="checkbox" data-choice-type="${escapeHtml(tone)}" data-choice-value="${escapeHtml(item)}"${checked}>
+        <span>${escapeHtml(item)}</span>
+      </label>`;
+  }).join("");
+}
+
+function renderLayoutEditor(state) {
+  const headers = getLayoutHeaders(state);
+  return headers.map((header, index) => {
+    const checked = state.reportHiddenColumns?.[header] ? "" : " checked";
+    const upDisabled = index === 0 ? " disabled" : "";
+    const downDisabled = index === headers.length - 1 ? " disabled" : "";
+    return `
+      <div class="stack-layout-row stack-item stack-item-layout" data-layout-header="${escapeHtml(header)}">
+        <label class="stack-layout-toggle">
+          <input type="checkbox" data-layout-column="${escapeHtml(header)}"${checked}>
+          <span>${escapeHtml(header)}</span>
+        </label>
+        <div class="stack-layout-actions">
+          <button type="button" class="stack-layout-button" data-layout-column="${escapeHtml(header)}" data-layout-move="up" title="Przesuń kolumnę wyżej"${upDisabled}>↑</button>
+          <button type="button" class="stack-layout-button" data-layout-column="${escapeHtml(header)}" data-layout-move="down" title="Przesuń kolumnę niżej"${downDisabled}>↓</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function rememberControlSelections(state) {
+  state.reportControlSelections = rememberSelectableValues("#reportControls");
+  updateReportNarrativeMeta(state);
+}
+
+function rememberAlertSelections(state) {
+  state.reportAlertSelections = rememberSelectableValues("#reportAlerts");
+}
+
+function rememberSelectableValues(containerSelector) {
+  const result = {};
+  document.querySelectorAll(`${containerSelector} [data-choice-value]`).forEach((input) => {
+    result[input.dataset.choiceValue] = input.checked;
+  });
+  return result;
+}
+
+function rememberColumnVisibility(state) {
+  const hidden = {};
+  document.querySelectorAll("#reportLayoutList [data-layout-column]").forEach((input) => {
+    hidden[input.dataset.layoutColumn] = !input.checked;
+  });
+  state.reportHiddenColumns = hidden;
+  ensureVisibleColumns(state);
+}
+
+function moveReportColumn(state, header, direction) {
+  syncReportLayoutState(state);
+  const current = [...state.reportColumnOrder];
+  const index = current.indexOf(header);
+  if (index < 0) return;
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (target < 0 || target >= current.length) return;
+  [current[index], current[target]] = [current[target], current[index]];
+  state.reportColumnOrder = current;
+  $("#reportLayoutList").innerHTML = renderLayoutEditor(state);
+  renderReportData(state);
+}
+
+function syncReportLayoutState(state) {
+  const baseHeaders = getAvailableLayoutHeaders(state);
+  if (!baseHeaders.length) {
+    state.reportColumnOrder = [];
+    state.reportHiddenColumns = {};
+    return;
+  }
+
+  const ordered = state.reportColumnOrder.filter((header) => baseHeaders.includes(header));
+  baseHeaders.forEach((header) => {
+    if (!ordered.includes(header)) ordered.push(header);
+  });
+  state.reportColumnOrder = ordered;
+  state.reportHiddenColumns = Object.fromEntries(
+    Object.entries(state.reportHiddenColumns || {}).filter(([header]) => baseHeaders.includes(header)),
+  );
+  ensureVisibleColumns(state, ordered);
+}
+
+function ensureVisibleColumns(state, headers = state.reportColumnOrder || []) {
+  if (!headers.length) return;
+  const visible = headers.filter((header) => !state.reportHiddenColumns?.[header]);
+  if (!visible.length) {
+    state.reportHiddenColumns[headers[0]] = false;
+  }
+}
+
+function getAvailableLayoutHeaders(state) {
+  const report = getCurrentReport(state);
+  return state.reportHeaders.length ? [...state.reportHeaders] : [...report.layout];
+}
+
+function getLayoutHeaders(state) {
+  syncReportLayoutState(state);
+  return [...state.reportColumnOrder];
+}
+
+function getVisibleReportHeaders(state) {
+  const headers = prioritizeHeadersForFocus(getLayoutHeaders(state), state);
+  const visible = headers.filter((header) => !state.reportHiddenColumns?.[header]);
+  return visible.length ? visible : headers.slice(0, 1);
+}
+
+function prioritizeHeadersForFocus(headers, state) {
+  const focusTexts = [
+    ...selectedTexts(state.reportControlSelections),
+    ...selectedTexts(state.reportAlertSelections),
+  ];
+  if (!focusTexts.length) return headers;
+
+  const scored = headers.map((header, index) => ({
+    header,
+    index,
+    score: focusTexts.reduce((total, text) => total + scoreHeaderAgainstFocus(header, text), 0),
+  }));
+  return scored
+    .sort((left, right) => (right.score - left.score) || (left.index - right.index))
+    .map((item) => item.header);
+}
+
+function selectedTexts(selectionMap) {
+  return Object.entries(selectionMap || {})
+    .filter(([, active]) => active)
+    .map(([text]) => text);
+}
+
+function selectedItemCount(selectionMap) {
+  return selectedTexts(selectionMap).length;
+}
+
+function updateReportNarrativeMeta(state) {
+  const report = getCurrentReport(state);
+  $("#reportScopeMeta").textContent = `${selectedItemCount(state.reportControlSelections)} z ${report.controls.length} kontroli aktywne`;
+}
+
+function scoreHeaderAgainstFocus(header, text) {
+  const normalizedHeader = normalizeText(header);
+  const keywords = keywordsFromText(text);
+  return keywords.reduce((score, keyword) => score + (normalizedHeader.includes(keyword) ? 1 : 0), 0);
+}
+
+function keywordsFromText(text) {
+  const words = normalizeText(text).split(" ").filter((part) => part.length > 2);
+  const extras = [];
+  if (words.includes("vat")) extras.push("stawka", "kwota", "problem", "rekomendacja");
+  if (words.includes("saldo")) extras.push("saldo", "kwota");
+  if (words.includes("walutowa") || words.includes("kursu") || words.includes("waluta")) extras.push("waluta", "kurs");
+  if (words.includes("bank")) extras.push("opis", "operacji", "konto");
+  if (words.includes("platnosci") || words.includes("platnosc")) extras.push("status", "termin", "kwota");
+  return [...new Set([...words, ...extras])];
 }
 
 function renderReportFilterControls(report, state) {
