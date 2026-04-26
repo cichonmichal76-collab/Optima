@@ -938,8 +938,8 @@ function bindEvents(state) {
   $("#exportExcelChart").addEventListener("click", () => exportActiveReport(state, "xlsx", true));
   $("#exportPdfTable").addEventListener("click", () => exportActiveReport(state, "pdf", false));
   $("#exportPdfChart").addEventListener("click", () => exportActiveReport(state, "pdf", true));
-  $("#applyReportTimeFilter").addEventListener("click", () => applyReportTimeFilter(state));
-  $("#clearReportTimeFilters").addEventListener("click", () => clearTimeFilters(state));
+  $("#applyReportFilters").addEventListener("click", () => applyReportSpecificFilters(state));
+  $("#clearReportFilters").addEventListener("click", () => clearReportSpecificFilters(state));
   $("#sqlDatabase").addEventListener("change", () => {
     persistDatabase($("#sqlDatabase").value.trim());
     updateBadges(state);
@@ -950,13 +950,14 @@ function bindEvents(state) {
   });
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
   $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
-  ["#filterYear", "#filterMonth", "#filterDateFrom", "#filterDateTo"].forEach((selector) => {
-    $(selector).addEventListener("change", () => syncReportFiltersFromTopbar());
-    $(selector).addEventListener("input", () => syncReportFiltersFromTopbar());
+  $("#reportFilterFields").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") applyReportSpecificFilters(state);
   });
-  ["#reportFilterYear", "#reportFilterMonth", "#reportFilterDateFrom", "#reportFilterDateTo"].forEach((selector) => {
-    $(selector).addEventListener("change", () => syncTopbarFiltersFromReport());
-    $(selector).addEventListener("input", () => syncTopbarFiltersFromReport());
+  $("#reportFilterFields").addEventListener("change", () => rememberReportFilterValues(state));
+  $("#reportFilterFields").addEventListener("click", (event) => {
+    if (!event.target.closest("[data-focus-time-filter]")) return;
+    $("#filterYear").focus();
+    document.querySelector(".topbar")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("#sideMenu").addEventListener("click", (event) => {
     const viewItem = event.target.closest("[data-view-key]");
@@ -1003,6 +1004,7 @@ function selectReport(state, reportKey) {
   if (!REPORTS_BY_KEY[reportKey]) return;
   state.currentView = "report";
   state.currentReportKey = reportKey;
+  state.reportFilterValues = {};
   clearReportData(state);
   renderSideMenu(state);
   renderCurrentView(state);
@@ -1248,7 +1250,6 @@ function renderYearOptions(state, selectedYear) {
     return `<option value="${escapeHtml(year)}"${selected}>${escapeHtml(label)}</option>`;
   }).join("");
   $("#filterYear").innerHTML = html;
-  $("#reportFilterYear").innerHTML = html;
 }
 
 function defaultYearFromDatabase(years) {
@@ -1299,15 +1300,18 @@ async function loadActiveReportData(state) {
       throw new Error(payload.error || "Nie udało się pobrać wyników raportu.");
     }
     state.reportHeaders = payload.headers || [];
-    state.reportRows = payload.rows || [];
+    state.reportRawRows = payload.rows || [];
+    state.reportRows = filterReportRows(state, state.reportRawRows);
     state.reportNotes = payload.notes || [];
     state.reportSource = payload.source || null;
     state.reportDataStatus = "ready";
     state.reportDataKey = report.key;
+    renderReportFilterControls(report, state);
     renderReportData(state);
   } catch (error) {
     state.reportHeaders = [];
     state.reportRows = [];
+    state.reportRawRows = [];
     state.reportNotes = [];
     state.reportSource = null;
     state.reportDataStatus = "error";
@@ -1320,6 +1324,7 @@ async function loadActiveReportData(state) {
 function clearReportData(state) {
   state.reportHeaders = [];
   state.reportRows = [];
+  state.reportRawRows = [];
   state.reportNotes = [];
   state.reportSource = null;
   state.reportDataStatus = "idle";
@@ -1386,14 +1391,8 @@ function updateBadges(state) {
 
 async function applyTimeFilter(state) {
   updateTimeFilterMeta();
-  syncReportFiltersFromTopbar();
   await loadAvailableData(state);
   await loadActiveReportData(state);
-}
-
-async function applyReportTimeFilter(state) {
-  syncTopbarFiltersFromReport();
-  await applyTimeFilter(state);
 }
 
 async function clearTimeFilters(state) {
@@ -1425,23 +1424,6 @@ function getTimeFilterPayload() {
 function updateTimeFilterMeta() {
   const description = describeTimeFilter();
   $("#timeFilterMeta").textContent = `Filtr: ${description}`;
-  $("#reportFilterMeta").textContent = `Aktywny filtr: ${description}`;
-}
-
-function syncReportFiltersFromTopbar() {
-  $("#reportFilterYear").value = $("#filterYear").value;
-  $("#reportFilterMonth").value = $("#filterMonth").value;
-  $("#reportFilterDateFrom").value = $("#filterDateFrom").value;
-  $("#reportFilterDateTo").value = $("#filterDateTo").value;
-  updateTimeFilterMeta();
-}
-
-function syncTopbarFiltersFromReport() {
-  $("#filterYear").value = $("#reportFilterYear").value;
-  $("#filterMonth").value = $("#reportFilterMonth").value;
-  $("#filterDateFrom").value = $("#reportFilterDateFrom").value;
-  $("#filterDateTo").value = $("#reportFilterDateTo").value;
-  updateTimeFilterMeta();
 }
 
 function describeTimeFilter() {
@@ -1536,8 +1518,7 @@ function renderActiveReport(state) {
   $("#reportSummary").textContent = report.summary;
   $("#reportQuestion").textContent = report.question;
   $("#reportSources").textContent = report.sources.join(", ");
-  renderReportFilterChips(report);
-  syncReportFiltersFromTopbar();
+  renderReportFilterControls(report, state);
   $("#reportPriority").textContent = `Priorytet: ${report.priority.toLowerCase()}`;
   $("#reportPriority").dataset.priority = report.priority.toLowerCase();
   $("#reportScopeMeta").textContent = `${report.controls.length} kontroli, ${report.layout.length} sekcji raportu`;
@@ -1589,6 +1570,7 @@ function renderReportData(state) {
 
   const sourceLabel = state.reportSource?.module ? ` źródło: ${moduleLabel(state.reportSource.module)}.` : "";
   $("#reportDataMeta").textContent = `${report.title}: ${state.reportRows.length.toLocaleString("pl-PL")} wierszy, filtr: ${describeTimeFilter()}.${sourceLabel}`;
+  updateReportFilterMeta(state);
   renderReportTable(
     state.reportHeaders,
     state.reportRows,
@@ -1804,10 +1786,199 @@ function stackItem(text, tone) {
     </article>`;
 }
 
-function renderReportFilterChips(report) {
-  $("#reportFilterChips").innerHTML = report.filters
-    .map((filter) => `<span class="report-filter-chip">${escapeHtml(filter)}</span>`)
-    .join("");
+function renderReportFilterControls(report, state) {
+  const controls = report.filters.map((filter) => reportFilterControl(filter, state)).join("");
+  $("#reportFilterFields").innerHTML = controls || '<div class="available-card is-empty">Ten raport nie ma dodatkowych filtrów.</div>';
+  updateReportFilterMeta(state);
+}
+
+function reportFilterControl(filter, state) {
+  const key = filterKey(filter);
+  const type = filterControlType(filter);
+  const value = state.reportFilterValues?.[key] || {};
+
+  if (type === "date-link") {
+    return `
+      <button type="button" class="report-filter-link" data-focus-time-filter="true">
+        <span>${escapeHtml(filter)}</span>
+        <strong>${escapeHtml(describeTimeFilter())}</strong>
+      </button>`;
+  }
+
+  if (type === "amount-range") {
+    return `
+      <div class="report-filter-field report-filter-field-range" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="amount-range">
+        <span>${escapeHtml(filter)}</span>
+        <input type="number" step="0.01" data-filter-part="min" value="${escapeHtml(value.min || "")}" placeholder="od">
+        <input type="number" step="0.01" data-filter-part="max" value="${escapeHtml(value.max || "")}" placeholder="do">
+      </div>`;
+  }
+
+  if (type === "select") {
+    const options = selectOptionsForFilter(filter, state.reportRawRows || state.reportRows || [], state.reportHeaders || []);
+    return `
+      <label class="report-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="select">
+        ${escapeHtml(filter)}
+        <select>
+          <option value="">Wszystkie</option>
+          ${options.map((option) => `<option value="${escapeHtml(option)}"${option === value.value ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        </select>
+      </label>`;
+  }
+
+  return `
+    <label class="report-filter-field" data-report-filter="${escapeHtml(key)}" data-filter-label="${escapeHtml(filter)}" data-filter-type="text">
+      ${escapeHtml(filter)}
+      <input type="text" value="${escapeHtml(value.value || "")}" placeholder="Wpisz fragment">
+    </label>`;
+}
+
+function applyReportSpecificFilters(state) {
+  rememberReportFilterValues(state);
+  state.reportRows = filterReportRows(state, state.reportRawRows || []);
+  renderReportData(state);
+}
+
+function clearReportSpecificFilters(state) {
+  state.reportFilterValues = {};
+  renderReportFilterControls(getCurrentReport(state), state);
+  state.reportRows = filterReportRows(state, state.reportRawRows || []);
+  renderReportData(state);
+}
+
+function rememberReportFilterValues(state) {
+  const values = {};
+  document.querySelectorAll("[data-report-filter]").forEach((field) => {
+    const key = field.dataset.reportFilter;
+    const type = field.dataset.filterType;
+    if (type === "amount-range") {
+      values[key] = {
+        type,
+        label: field.dataset.filterLabel || "",
+        min: field.querySelector("[data-filter-part='min']")?.value.trim() || "",
+        max: field.querySelector("[data-filter-part='max']")?.value.trim() || "",
+      };
+      return;
+    }
+    const input = field.querySelector("input, select");
+    values[key] = {
+      type,
+      label: field.dataset.filterLabel || "",
+      value: input?.value.trim() || "",
+    };
+  });
+  state.reportFilterValues = values;
+  updateReportFilterMeta(state);
+}
+
+function filterReportRows(state, rows) {
+  const filters = Object.values(state.reportFilterValues || {}).filter(filterValueIsActive);
+  if (!filters.length) return [...rows];
+  return rows.filter((row) => filters.every((filter) => rowMatchesReportFilter(row, state.reportHeaders, filter)));
+}
+
+function rowMatchesReportFilter(row, headers, filter) {
+  if (filter.type === "amount-range") {
+    const min = filter.min === "" ? null : Number(filter.min);
+    const max = filter.max === "" ? null : Number(filter.max);
+    const amountHeaders = headers.filter(isAmountHeader);
+    return amountHeaders.some((header) => {
+      const value = coerceChartNumber(row[header]);
+      if (value === null) return false;
+      if (min !== null && value < min) return false;
+      if (max !== null && value > max) return false;
+      return true;
+    });
+  }
+
+  const needle = String(filter.value || "").toLowerCase();
+  if (!needle) return true;
+  const matchingHeaders = headersForFilter(filter.label, headers);
+  return matchingHeaders.some((header) => String(row[header] ?? "").toLowerCase().includes(needle));
+}
+
+function filterValueIsActive(filter) {
+  if (!filter) return false;
+  if (filter.type === "amount-range") return filter.min !== "" || filter.max !== "";
+  return Boolean(filter.value);
+}
+
+function updateReportFilterMeta(state) {
+  const active = Object.values(state.reportFilterValues || {}).filter(filterValueIsActive).length;
+  const source = state.reportRawRows?.length || 0;
+  const visible = state.reportRows?.length || 0;
+  const suffix = source ? `, widoczne ${visible.toLocaleString("pl-PL")} z ${source.toLocaleString("pl-PL")}` : "";
+  $("#reportFilterMeta").textContent = active ? `Filtry raportu: ${active} aktywne${suffix}` : `Filtry raportu: brak${suffix}`;
+}
+
+function filterControlType(filter) {
+  const normalized = normalizeText(filter);
+  if (normalized.includes("okres") || normalized.includes("data") || normalized.includes("typ daty")) return "date-link";
+  if (normalized.includes("kwota") || normalized.includes("suma") || normalized.includes("wartosc")) return "amount-range";
+  if (normalized.includes("status") || normalized.includes("typ dokumentu") || normalized.includes("waluta") || normalized.includes("priorytet")) return "select";
+  return "text";
+}
+
+function selectOptionsForFilter(filter, rows, headers) {
+  const matchingHeaders = headersForFilter(filter, headers);
+  const options = new Set();
+  rows.slice(0, 500).forEach((row) => {
+    matchingHeaders.forEach((header) => {
+      const value = String(row[header] ?? "").trim();
+      if (value && value.length <= 80) options.add(value);
+    });
+  });
+  return [...options].sort((left, right) => left.localeCompare(right, "pl")).slice(0, 80);
+}
+
+function headersForFilter(filter, headers) {
+  const normalizedFilter = normalizeText(filter);
+  const aliases = [
+    ["kontrahent", ["kontrahent", "dostawca", "odbiorca", "podmiot", "klient"]],
+    ["status platnosci", ["status platnosci", "status", "rozliczono"]],
+    ["status ksiegowy", ["status ksiegowy", "status", "bufor"]],
+    ["status vat", ["status vat", "status", "vat"]],
+    ["status ksef", ["status ksef", "ksef", "status"]],
+    ["status", ["status"]],
+    ["typ dokumentu", ["typ dokumentu", "typ"]],
+    ["typ blokady", ["typ blokady", "blokada", "problem"]],
+    ["priorytet", ["priorytet"]],
+    ["waluta", ["waluta"]],
+    ["nip", ["nip"]],
+    ["konto", ["konto"]],
+    ["kategoria", ["kategoria"]],
+    ["mpk", ["mpk"]],
+    ["projekt", ["projekt"]],
+    ["zadanie", ["zadanie"]],
+    ["osoba", ["osoba", "operator", "odpowiedzialny"]],
+    ["pracownik", ["pracownik", "nazwisko", "imie"]],
+  ];
+  const matched = aliases.find(([name]) => normalizedFilter.includes(name));
+  const needles = matched ? matched[1] : normalizedFilter.split(" ").filter((part) => part.length > 2);
+  const result = headers.filter((header) => {
+    const normalizedHeader = normalizeText(header);
+    return needles.some((needle) => normalizedHeader.includes(needle));
+  });
+  return result.length ? result : headers;
+}
+
+function isAmountHeader(header) {
+  const normalized = normalizeText(header);
+  return ["kwota", "brutto", "netto", "vat", "suma", "wartosc", "saldo", "wplyw", "wydatek", "koszt"].some((part) => normalized.includes(part));
+}
+
+function filterKey(value) {
+  return normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ł/g, "l")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function getCurrentReport(state) {

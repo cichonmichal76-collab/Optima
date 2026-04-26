@@ -175,48 +175,14 @@
               <strong id="reportSources">Optima, KSeF, bank, OCR, Excel</strong>
             </div>
             <div class="report-meta-card report-filter-card">
-              <span class="meta-label">Filtry globalne</span>
+              <span class="meta-label">Filtry raportu</span>
               <div id="reportFilters" class="report-filter-controls">
-                <div class="report-filter-grid">
-                  <label>
-                    Rok
-                    <select id="reportFilterYear" aria-label="Rok raportu">
-                      <option value="">Wszystkie lata</option>
-                    </select>
-                  </label>
-                  <label>
-                    Miesiąc
-                    <select id="reportFilterMonth" aria-label="Miesiąc raportu">
-                      <option value="">Cały rok</option>
-                      <option value="01">Styczeń</option>
-                      <option value="02">Luty</option>
-                      <option value="03" selected>Marzec</option>
-                      <option value="04">Kwiecień</option>
-                      <option value="05">Maj</option>
-                      <option value="06">Czerwiec</option>
-                      <option value="07">Lipiec</option>
-                      <option value="08">Sierpień</option>
-                      <option value="09">Wrzesień</option>
-                      <option value="10">Październik</option>
-                      <option value="11">Listopad</option>
-                      <option value="12">Grudzień</option>
-                    </select>
-                  </label>
-                  <label>
-                    Od
-                    <input id="reportFilterDateFrom" type="date" aria-label="Data od w raporcie">
-                  </label>
-                  <label>
-                    Do
-                    <input id="reportFilterDateTo" type="date" aria-label="Data do w raporcie">
-                  </label>
-                </div>
+                <div id="reportFilterFields" class="report-filter-grid"></div>
                 <div class="report-filter-actions">
-                  <button id="applyReportTimeFilter" class="primary-button" type="button">Zastosuj</button>
-                  <button id="clearReportTimeFilters" class="plain-button" type="button">Wyczyść</button>
-                  <span id="reportFilterMeta" class="report-filter-meta">Aktywny filtr: marzec 2026</span>
+                  <button id="applyReportFilters" class="primary-button" type="button">Zastosuj filtry raportu</button>
+                  <button id="clearReportFilters" class="plain-button" type="button">Wyczyść filtry raportu</button>
+                  <span id="reportFilterMeta" class="report-filter-meta">Filtry raportu: brak</span>
                 </div>
-                <div id="reportFilterChips" class="report-filter-chips"></div>
               </div>
             </div>
           </div>
