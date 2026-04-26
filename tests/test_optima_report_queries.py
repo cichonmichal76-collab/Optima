@@ -349,11 +349,14 @@ def test_report_data_uses_explicit_manual_entries_query(monkeypatch):
 def test_buildings_report_exposes_monthly_margin_columns():
     query = build_report_query("buildings", "202603")
 
+    assert "SiteAccounts AS (" in query.sql
     assert "KnownSites AS (" in query.sql
     assert "RevenueBase AS (" in query.sql
     assert "CostBase AS (" in query.sql
-    assert "730-150%" in query.sql
-    assert "500-150%" in query.sql
+    assert "730-%" in query.sql
+    assert "720-%" in query.sql
+    assert "500-%" in query.sql
+    assert "SiteCode" in query.sql
     assert "[Przychody]" in query.sql
     assert "[Podwykonawcy]" in query.sql
     assert "[SP. z o.o.]" in query.sql
@@ -367,7 +370,6 @@ def test_buildings_report_exposes_monthly_margin_columns():
     assert "n.DeN_DataDok >= '2026-03-01'" in query.sql
     assert "n.DeN_DataDok < '2026-04-01'" in query.sql
     assert query.notes
-
 
 def test_report_data_uses_explicit_buildings_query(monkeypatch):
     def fake_run_sqlcmd_table(sql, config):
