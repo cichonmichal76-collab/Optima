@@ -104,6 +104,7 @@ class ColumnMapper:
             field_name = self._lookup.get(normalized_header_name)
             if field_name and field_name in self.fields_for_kind(data_kind) and field_name not in mapping:
                 mapping[field_name] = original_header
+        self._map_kind_specific_headers(normalized_to_original, mapping, data_kind)
         if data_kind == DataKind.LEDGER:
             self._map_optima_ledger_accounts(normalized_to_original, mapping)
         return mapping
@@ -145,3 +146,20 @@ class ColumnMapper:
             mapping["account"] = main_account
         if opposite_account and "account_opposite" not in mapping:
             mapping["account_opposite"] = opposite_account
+
+    @staticmethod
+    def _map_kind_specific_headers(
+        normalized_to_original: dict[str, str],
+        mapping: dict[str, str],
+        data_kind: DataKind,
+    ) -> None:
+        if data_kind == DataKind.ACCOUNT_PLAN:
+            if "name" not in mapping and normalized_to_original.get("nazwa"):
+                mapping["name"] = normalized_to_original["nazwa"]
+            if "is_active" not in mapping and normalized_to_original.get("status"):
+                mapping["is_active"] = normalized_to_original["status"]
+            return
+
+        if data_kind in {DataKind.SETTLEMENTS, DataKind.BANK}:
+            if "status" not in mapping and normalized_to_original.get("status"):
+                mapping["status"] = normalized_to_original["status"]

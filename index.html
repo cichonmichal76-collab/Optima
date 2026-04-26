@@ -155,6 +155,135 @@
         </div>
       </section>
 
+      <section id="viewAdministration" class="app-view administration-view" aria-labelledby="administrationTitle">
+        <section class="panel admin-hero">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Administracja</span>
+              <h3 id="administrationTitle">Walidacja odczytu SQL względem eksportu z Optimy</h3>
+            </div>
+            <span class="muted" id="adminFilterMeta">Filtr globalny: bez ograniczenia dat</span>
+          </div>
+          <p class="disclaimer">
+            Wgraj eksport Excela z Optimy, wskaż typ danych i uruchom sprawdzanie.
+            Program mapuje kolumny Excela do pól kanonicznych, porównuje je z odczytem SQL i pokazuje,
+            czy interpretacja tabel SQL zgadza się z rzeczywistą zawartością eksportu.
+          </p>
+        </section>
+
+        <div class="admin-grid">
+          <section class="panel admin-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Plik do weryfikacji</h3>
+                <span class="muted">Obsługiwane profile: VAT zakup, VAT sprzedaż, zapisy księgowe, plan kont</span>
+              </div>
+            </div>
+            <div class="admin-form">
+              <label>
+                Typ eksportu z Optimy
+                <select id="adminValidationKind" aria-label="Typ eksportu z Optimy">
+                  <option value="VAT_PURCHASE">Rejestr VAT zakup</option>
+                  <option value="VAT_SALE">Rejestr VAT sprzedaż</option>
+                  <option value="LEDGER">Zapisy księgowe</option>
+                  <option value="ACCOUNT_PLAN">Plan kont</option>
+                </select>
+              </label>
+              <label>
+                Plik Excel z Optimy
+                <input id="adminValidationFile" type="file" accept=".xlsx,.xls" aria-label="Plik Excel z Optimy">
+              </label>
+              <div class="admin-actions">
+                <button id="runAdminValidation" class="primary-button" type="button">Sprawdź zgodność z SQL</button>
+                <button id="clearAdminValidation" class="plain-button" type="button">Wyczyść</button>
+              </div>
+            </div>
+            <div id="adminUploadMeta" class="file-meta">Najpierw wybierz plik Excel z eksportem z Optimy.</div>
+            <div id="adminValidationMeta" class="connection-status" hidden>Walidacja SQL oczekuje na plik.</div>
+          </section>
+
+          <section class="panel admin-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Podgląd eksportu</h3>
+                <span id="adminPreviewMeta" class="muted">Brak załadowanego pliku.</span>
+              </div>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead id="adminPreviewHead"></thead>
+                <tbody id="adminPreviewRows">
+                  <tr><td class="empty">Podgląd pojawi się po wskazaniu pliku.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="metrics-grid" id="adminValidationMetrics"></section>
+
+        <div class="admin-grid">
+          <section class="panel admin-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Mapowanie pól</h3>
+                <span class="muted">Excel -> pola kanoniczne -> SQL</span>
+              </div>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pole</th>
+                    <th>Kolumna Excel</th>
+                    <th>Kolumna SQL</th>
+                    <th>Porównywane</th>
+                  </tr>
+                </thead>
+                <tbody id="adminMappingRows">
+                  <tr><td class="empty" colspan="4">Mapowanie pojawi się po uruchomieniu walidacji.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel admin-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Rozbieżności</h3>
+                <span id="adminDiffMeta" class="muted">Brak porównania.</span>
+              </div>
+            </div>
+            <div class="admin-diff-grid">
+              <div>
+                <span class="meta-label">Tylko w Excelu</span>
+                <div id="adminExcelOnly" class="available-data-grid">
+                  <div class="available-card is-empty">Po walidacji zobaczysz wiersze, które są tylko w Excelu.</div>
+                </div>
+              </div>
+              <div>
+                <span class="meta-label">Tylko w SQL</span>
+                <div id="adminSqlOnly" class="available-data-grid">
+                  <div class="available-card is-empty">Po walidacji zobaczysz wiersze, które są tylko w SQL.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel admin-panel">
+          <div class="panel-head">
+            <div>
+              <h3>Sumy kontrolne i próbki SQL</h3>
+              <span id="adminTotalsMeta" class="muted">Po walidacji zobaczysz sumy oraz próbki porównania.</span>
+            </div>
+          </div>
+          <div id="adminTotals" class="available-data-grid">
+            <div class="available-card is-empty">Brak sum kontrolnych do pokazania.</div>
+          </div>
+        </section>
+      </section>
+
       <section id="viewReport" class="app-view report-shell" aria-labelledby="reportTitle">
         <section class="panel report-hero">
           <div class="panel-head report-hero-head">

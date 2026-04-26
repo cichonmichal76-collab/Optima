@@ -19,6 +19,7 @@ from src.connectors.optima_data_catalog import build_available_data_sql, build_m
 from src.connectors.optima_report_queries import build_report_query
 from src.connectors.optima_sql_mapping import build_optima_sql_query
 from src.connectors.optima_sql_runner import SqlcmdConfig, run_sqlcmd_table
+from src.connectors.optima_sql_validation import validate_excel_against_sql
 from src.core.enums import DataKind
 from src.export.report_sql import export_sql_report_pdf, export_sql_report_xlsx
 
@@ -55,6 +56,9 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/report-export":
             self._handle_report_export()
+            return
+        if self.path == "/api/sql-validation":
+            self._handle_sql_validation()
             return
         if self.path == "/api/backup-info":
             self._handle_backup_info()
@@ -148,6 +152,14 @@ class OptimaRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json_body()
             response = export_report(payload)
+            self._send_json(response)
+        except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_sql_validation(self) -> None:
+        try:
+            payload = self._read_json_body()
+            response = validate_sql_read(payload)
             self._send_json(response)
         except Exception as exc:  # noqa: BLE001 - local server returns user-facing errors.
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -436,6 +448,36 @@ def export_report(payload: dict[str, Any]) -> dict[str, Any]:
         "file_name": file_path.name,
         "download_url": f"/exports/{file_path.name}",
     }
+
+
+def validate_sql_read(payload: dict[str, Any]) -> dict[str, Any]:
+    kind = str(payload.get("kind") or "").strip()
+    headers = [str(header) for header in payload.get("headers") or []]
+    rows = [
+        {str(key): value for key, value in row.items()}
+        for row in payload.get("rows") or []
+        if isinstance(row, dict)
+    ]
+    server = str(payload.get("server") or r".\SQLEXPRESS02").strip()
+    database = str(payload.get("database") or "OptimaAudit_Firma_202603").strip()
+    period = payload.get("period")
+    year = payload.get("year")
+    date_from = str(payload.get("date_from") or "").strip() or None
+    date_to = str(payload.get("date_to") or "").strip() or None
+    sqlcmd_path = str(payload.get("sqlcmd") or "").strip() or None
+
+    return validate_excel_against_sql(
+        headers=headers,
+        rows=rows,
+        data_kind=kind,
+        server=server,
+        database=database,
+        period=period,
+        year=year,
+        date_from=date_from,
+        date_to=date_to,
+        sqlcmd_path=sqlcmd_path,
+    )
 
 
 def list_optima_databases(server: str, sqlcmd_path: str | None = None) -> list[dict[str, str]]:

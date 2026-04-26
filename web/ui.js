@@ -1,4 +1,5 @@
 import { exportReportFile } from "./exporters.js";
+import { parseInputFile } from "./parsers.js";
 import { $, escapeHtml, parseAmount } from "./utils.js";
 
 const MODULE_LABELS = {
@@ -13,6 +14,13 @@ const MODULE_LABELS = {
   DOCUMENTS: "Dokumenty i załączniki",
   FIXED_ASSETS: "Środki trwałe",
   HR_PAYROLL: "Kadry i płace",
+};
+
+const ADMIN_VALIDATION_LABELS = {
+  VAT_PURCHASE: "Rejestr VAT zakup",
+  VAT_SALE: "Rejestr VAT sprzedaż",
+  LEDGER: "Zapisy księgowe",
+  ACCOUNT_PLAN: "Plan kont",
 };
 
 const REPORT_GROUPS = [
@@ -917,6 +925,7 @@ export function initApp(state) {
   renderSideMenu(state);
   renderStartFavorites(state);
   bindEvents(state);
+  renderAdministration(state);
   renderActiveReport(state);
   renderReportData(state);
   renderReportActions(state);
@@ -945,11 +954,21 @@ function bindEvents(state) {
     updateBadges(state);
     loadAvailableYears(state);
     loadAvailableData(state);
+    renderAdministration(state);
     renderActiveReport(state);
     loadActiveReportData(state);
   });
   $("#applyTimeFilter").addEventListener("click", () => applyTimeFilter(state));
   $("#clearTimeFilters").addEventListener("click", () => clearTimeFilters(state));
+  $("#adminValidationFile").addEventListener("change", () => loadAdminFile(state));
+  $("#adminValidationKind").addEventListener("change", () => {
+    state.adminValidationResult = null;
+    state.adminValidationError = "";
+    if (state.adminValidationStatus === "ready") state.adminValidationStatus = "idle";
+    renderAdministration(state);
+  });
+  $("#runAdminValidation").addEventListener("click", () => runAdminValidation(state));
+  $("#clearAdminValidation").addEventListener("click", () => clearAdminValidation(state));
   $("#reportFilterFields").addEventListener("keydown", (event) => {
     if (event.key === "Enter") applyReportSpecificFilters(state);
   });
@@ -1011,6 +1030,15 @@ function selectView(state, viewKey) {
     return;
   }
 
+  if (viewKey === "administration") {
+    state.currentView = "administration";
+    renderSideMenu(state);
+    renderCurrentView(state);
+    renderAdministration(state);
+    updateBadges(state);
+    return;
+  }
+
   state.currentView = viewKey === "communication" ? "communication" : "start";
   renderSideMenu(state);
   renderCurrentView(state);
@@ -1041,7 +1069,10 @@ function resetInteractiveReportState(state) {
 
 async function restoreKnownDatabase(state) {
   const restored = await ensureDatabaseAvailable(state);
-  if (restored) await loadActiveReportData(state);
+  if (restored) {
+    await loadActiveReportData(state);
+    renderAdministration(state);
+  }
 }
 
 async function ensureDatabaseAvailable(state) {
@@ -1057,6 +1088,7 @@ async function ensureDatabaseAvailable(state) {
   updateBadges(state);
   await loadAvailableYears(state);
   await loadAvailableData(state);
+  renderAdministration(state);
   return true;
 }
 
@@ -1227,6 +1259,7 @@ async function loadAvailableData(state) {
     if (!response.ok || payload.error) throw new Error(payload.error || "Nie udało się pobrać katalogu danych.");
     state.availableData = payload.modules || [];
     renderAvailableData(state);
+    renderAdministration(state);
     renderActiveReport(state);
   } catch (error) {
     state.availableData = [];
@@ -1260,9 +1293,11 @@ async function loadAvailableYears(state) {
       : defaultYearFromDatabase(state.availableYears);
     renderYearOptions(state, selectedYear);
     updateTimeFilterMeta();
+    renderAdministration(state);
   } catch (_error) {
     state.availableYears = [];
     renderYearOptions(state, currentYear);
+    renderAdministration(state);
   }
 }
 
@@ -1409,6 +1444,11 @@ function updateBadges(state) {
     $("#viewSubtitle").textContent = "Podłącz backup SQL i sprawdź listę pewnych danych wykrytych w bazie.";
     return;
   }
+  if (view === "administration") {
+    $("#selectedReportBadge").textContent = "Widok: Administracja";
+    $("#viewSubtitle").textContent = "PorĂłwnaj eksport Excela z Optimy z odczytem SQL i sprawdĹş, czy mapowanie jest pewne.";
+    return;
+  }
   if (view === "report") {
     $("#selectedReportBadge").textContent = `Raport: ${report?.title || "Brak raportu"}`;
     $("#viewSubtitle").textContent = report?.question || "Wybierz raport z menu po lewej.";
@@ -1422,6 +1462,7 @@ async function applyTimeFilter(state) {
   updateTimeFilterMeta();
   await loadAvailableData(state);
   await loadActiveReportData(state);
+  renderAdministration(state);
 }
 
 async function clearTimeFilters(state) {
@@ -1473,6 +1514,18 @@ function describeTimeFilter() {
 }
 
 function renderSideMenu(state) {
+  const mainItems = [
+    sideViewItem("start", "START", "Strona startowa", state),
+    sideViewItem("communication", "Komunikacja", "PodĹ‚Ä…czanie bazy i wykryte dane", state),
+    sideViewItem("report", "Raport", "Aktywny raport i wyniki SQL", state),
+    ...SIDEBAR_GROUP_IDS.map((groupId) => sideReportGroup(REPORT_GROUPS_BY_ID[groupId], state)),
+  ].join("");
+  $("#sideMenu").innerHTML = `
+    <div class="side-menu-main">${mainItems}</div>
+    <div class="side-menu-footer">
+      ${sideViewItem("administration", "Administracja", "Walidacja Excel vs SQL i kontrola poprawnoĹ›ci odczytu", state)}
+    </div>`;
+  return;
   $("#sideMenu").innerHTML = [
     sideViewItem("start", "START", "Strona startowa", state),
     sideViewItem("communication", "Komunikacja", "Podłączanie bazy i wykryte dane", state),
@@ -1486,6 +1539,7 @@ function renderCurrentView(state) {
   [
     ["start", "#viewStart"],
     ["communication", "#viewCommunication"],
+    ["administration", "#viewAdministration"],
     ["report", "#viewReport"],
   ].forEach(([viewKey, selector]) => {
     $(selector).classList.toggle("is-active", viewKey === activeView);
@@ -1503,6 +1557,259 @@ function renderStartFavorites(state) {
   $("#startFavorites").innerHTML = favorites.length
     ? favorites.map((report) => startFavoriteCard(report)).join("")
     : '<div class="available-card is-empty">Dodaj raport do ulubionych, a pojawi się tutaj jako szybki skrót.</div>';
+}
+
+function renderAdministration(state) {
+  $("#adminFilterMeta").textContent = `Filtr globalny: ${describeTimeFilter()}`;
+  $("#adminUploadMeta").textContent = state.adminSourceFileName
+    ? `ZaĹ‚adowano plik ${state.adminSourceFileName} (${state.adminSourceFormat || "nieznany format"}).`
+    : "Najpierw wybierz plik Excel z eksportem z Optimy.";
+  $("#adminPreviewMeta").textContent = state.adminSourceFileName
+    ? `${state.adminSourceFileName}: ${(state.adminSourceFile?.rows?.length || 0).toLocaleString("pl-PL")} wierszy, ${state.adminPreviewHeaders.length} kolumn.`
+    : "Brak zaĹ‚adowanego pliku.";
+
+  renderAdminPreviewTable(state.adminPreviewHeaders, state.adminPreviewRows);
+  renderAdminValidationResult(state);
+}
+
+async function loadAdminFile(state) {
+  const file = $("#adminValidationFile").files?.[0];
+  state.adminValidationResult = null;
+  state.adminValidationError = "";
+  state.adminValidationStatus = "idle";
+
+  if (!file) {
+    state.adminSourceFile = null;
+    state.adminSourceFileName = "";
+    state.adminSourceFormat = "";
+    state.adminPreviewHeaders = [];
+    state.adminPreviewRows = [];
+    renderAdministration(state);
+    return;
+  }
+
+  $("#adminUploadMeta").textContent = `WczytujÄ™ plik ${file.name}...`;
+  try {
+    const parsed = await parseInputFile(file);
+    state.adminSourceFile = parsed;
+    state.adminSourceFileName = file.name;
+    state.adminSourceFormat = parsed.format || "XLSX";
+    state.adminPreviewHeaders = parsed.headers || [];
+    state.adminPreviewRows = (parsed.rows || []).slice(0, 10);
+    renderAdministration(state);
+  } catch (error) {
+    state.adminSourceFile = null;
+    state.adminSourceFileName = file.name;
+    state.adminSourceFormat = "";
+    state.adminPreviewHeaders = [];
+    state.adminPreviewRows = [];
+    state.adminValidationStatus = "error";
+    state.adminValidationError = error.message;
+    renderAdministration(state);
+  }
+}
+
+function clearAdminValidation(state) {
+  $("#adminValidationFile").value = "";
+  state.adminSourceFile = null;
+  state.adminSourceFileName = "";
+  state.adminSourceFormat = "";
+  state.adminPreviewHeaders = [];
+  state.adminPreviewRows = [];
+  state.adminValidationStatus = "idle";
+  state.adminValidationResult = null;
+  state.adminValidationError = "";
+  renderAdministration(state);
+}
+
+async function runAdminValidation(state) {
+  if (!state.adminSourceFile) {
+    state.adminValidationStatus = "error";
+    state.adminValidationError = "Najpierw wybierz eksport Excela z Optimy.";
+    renderAdministration(state);
+    return;
+  }
+
+  if (!$("#sqlDatabase").value.trim()) {
+    const restored = await ensureDatabaseAvailable(state);
+    if (!restored) {
+      state.adminValidationStatus = "error";
+      state.adminValidationError = "Najpierw podĹ‚Ä…cz bazÄ™ SQL.";
+      renderAdministration(state);
+      return;
+    }
+  }
+
+  state.adminValidationStatus = "loading";
+  state.adminValidationResult = null;
+  state.adminValidationError = "";
+  renderAdministration(state);
+
+  const payload = {
+    kind: $("#adminValidationKind").value,
+    headers: state.adminSourceFile.headers || [],
+    rows: state.adminSourceFile.rows || [],
+    server: $("#sqlServer").value.trim(),
+    database: $("#sqlDatabase").value.trim(),
+    ...getTimeFilterPayload(),
+  };
+
+  try {
+    const response = await fetch("/api/sql-validation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      throw new Error(result.error || "Nie udaĹ‚o siÄ™ zweryfikowaÄ‡ zgodnoĹ›ci Excela z SQL.");
+    }
+    state.adminValidationStatus = "ready";
+    state.adminValidationResult = result;
+    renderAdministration(state);
+  } catch (error) {
+    state.adminValidationStatus = "error";
+    state.adminValidationError = error.message;
+    renderAdministration(state);
+  }
+}
+
+function renderAdminPreviewTable(headers, rows) {
+  const previewHeaders = headers.slice(0, 8);
+  $("#adminPreviewHead").innerHTML = previewHeaders.length
+    ? `<tr>${previewHeaders.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`
+    : "";
+  $("#adminPreviewRows").innerHTML = rows.length
+    ? rows.map((row) => `<tr>${previewHeaders.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`).join("")
+    : `<tr><td class="empty" colspan="${Math.max(previewHeaders.length, 1)}">PodglÄ…d pojawi siÄ™ po wskazaniu pliku.</td></tr>`;
+}
+
+function renderAdminValidationResult(state) {
+  const status = state.adminValidationStatus;
+  const result = state.adminValidationResult;
+  const noDataCard = '<div class="available-card is-empty">Uruchom walidacjÄ™, aby zobaczyÄ‡ wynik porĂłwnania.</div>';
+
+  if (status === "loading") {
+    $("#adminValidationMeta").hidden = false;
+    $("#adminValidationMeta").textContent = "Trwa porĂłwnanie Excela z SQL...";
+    $("#adminValidationMetrics").innerHTML = "";
+    $("#adminMappingRows").innerHTML = '<tr><td class="empty" colspan="4">Trwa mapowanie pĂłl i porĂłwnanie danych.</td></tr>';
+    $("#adminDiffMeta").textContent = "PorĂłwnanie w toku.";
+    $("#adminExcelOnly").innerHTML = noDataCard;
+    $("#adminSqlOnly").innerHTML = noDataCard;
+    $("#adminTotalsMeta").textContent = "Trwa budowanie sum kontrolnych.";
+    $("#adminTotals").innerHTML = noDataCard;
+    return;
+  }
+
+  if (status === "error") {
+    $("#adminValidationMeta").hidden = false;
+    $("#adminValidationMeta").textContent = `BĹ‚Ä…d walidacji: ${state.adminValidationError || "nieznany bĹ‚Ä…d"}`;
+    $("#adminValidationMetrics").innerHTML = "";
+    $("#adminMappingRows").innerHTML = '<tr><td class="empty" colspan="4">Walidacja nie powiodĹ‚a siÄ™.</td></tr>';
+    $("#adminDiffMeta").textContent = "Brak wyniku porĂłwnania.";
+    $("#adminExcelOnly").innerHTML = noDataCard;
+    $("#adminSqlOnly").innerHTML = noDataCard;
+    $("#adminTotalsMeta").textContent = "Brak sum kontrolnych.";
+    $("#adminTotals").innerHTML = noDataCard;
+    return;
+  }
+
+  if (!result) {
+    $("#adminValidationMeta").hidden = true;
+    $("#adminValidationMetrics").innerHTML = "";
+    $("#adminMappingRows").innerHTML = '<tr><td class="empty" colspan="4">Mapowanie pojawi siÄ™ po uruchomieniu walidacji.</td></tr>';
+    $("#adminDiffMeta").textContent = "Brak porĂłwnania.";
+    $("#adminExcelOnly").innerHTML = noDataCard;
+    $("#adminSqlOnly").innerHTML = noDataCard;
+    $("#adminTotalsMeta").textContent = "Po walidacji zobaczysz sumy oraz prĂłbki porĂłwnania.";
+    $("#adminTotals").innerHTML = noDataCard;
+    return;
+  }
+
+  $("#adminValidationMeta").hidden = false;
+  $("#adminValidationMeta").textContent = result.status === "success"
+    ? `PeĹ‚na zgodnoĹ›Ä‡ dla profilu ${result.kind_label}.`
+    : `Wykryto rozbieĹĽnoĹ›ci dla profilu ${result.kind_label}.`;
+  $("#adminValidationMetrics").innerHTML = [
+    { label: "Status", value: result.status === "success" ? "PeĹ‚na zgodnoĹ›Ä‡" : "RozbieĹĽnoĹ›ci", tone: result.status === "success" ? "success" : "warning" },
+    { label: "Wiersze Excel", value: formatCount(result.summary.excel_rows), tone: "info" },
+    { label: "Wiersze SQL", value: formatCount(result.summary.sql_rows), tone: "info" },
+    { label: "Dopasowane", value: formatCount(result.summary.matched_rows), tone: "success" },
+    { label: "Tylko Excel", value: formatCount(result.summary.excel_only_rows), tone: result.summary.excel_only_rows ? "warning" : "neutral" },
+    { label: "Tylko SQL", value: formatCount(result.summary.sql_only_rows), tone: result.summary.sql_only_rows ? "warning" : "neutral" },
+    { label: "ZgodnoĹ›Ä‡", value: result.summary.match_rate, tone: result.status === "success" ? "success" : "warning" },
+  ].map(metricCard).join("");
+  $("#adminMappingRows").innerHTML = result.mapping.fields.length
+    ? result.mapping.fields.map(adminMappingRow).join("")
+    : '<tr><td class="empty" colspan="4">Brak wspĂłlnych pĂłl do porĂłwnania.</td></tr>';
+  $("#adminDiffMeta").textContent = `PorĂłwnywane pola: ${result.mapping.compared_fields.join(", ") || "brak"}.`;
+  $("#adminExcelOnly").innerHTML = result.differences.excel_only_sample.length
+    ? result.differences.excel_only_sample.map((row) => adminDifferenceCard(row, "Tylko w Excelu")).join("")
+    : '<div class="available-card is-empty">Brak wierszy wystÄ™pujÄ…cych tylko w Excelu.</div>';
+  $("#adminSqlOnly").innerHTML = result.differences.sql_only_sample.length
+    ? result.differences.sql_only_sample.map((row) => adminDifferenceCard(row, "Tylko w SQL")).join("")
+    : '<div class="available-card is-empty">Brak wierszy wystÄ™pujÄ…cych tylko w SQL.</div>';
+  $("#adminTotalsMeta").textContent = result.notes.join(" ");
+  $("#adminTotals").innerHTML = [
+    ...result.totals.map((item) => adminTotalCard(item)),
+    adminPreviewCard("PrĂłbka Excel", result.preview.excel_sample),
+    adminPreviewCard("PrĂłbka SQL", result.preview.sql_sample),
+  ].join("") || noDataCard;
+}
+
+function adminMappingRow(item) {
+  return `
+    <tr>
+      <td>${escapeHtml(item.label)}</td>
+      <td>${escapeHtml(item.excel_header || "—")}</td>
+      <td>${escapeHtml(item.sql_header || "—")}</td>
+      <td>${item.compared ? "TAK" : "NIE"}</td>
+    </tr>`;
+}
+
+function adminDifferenceCard(row, title) {
+  return `
+    <article class="available-card">
+      <div class="available-title">
+        <span>${escapeHtml(title)}</span>
+      </div>
+      <div class="admin-row-preview">${Object.entries(row).map(([key, value]) => `<div><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</div>`).join("")}</div>
+    </article>`;
+}
+
+function adminTotalCard(item) {
+  const tone = item.match ? " is-related" : "";
+  return `
+    <article class="available-card${tone}">
+      <div class="available-title">
+        <span>${escapeHtml(item.label)}</span>
+        <span class="available-count">${item.match ? "OK" : "RÓŻNICA"}</span>
+      </div>
+      <div class="admin-row-preview">
+        <div><strong>Excel:</strong> ${escapeHtml(item.excel_total)}</div>
+        <div><strong>SQL:</strong> ${escapeHtml(item.sql_total)}</div>
+        <div><strong>RĂłĹĽnica:</strong> ${escapeHtml(item.difference)}</div>
+      </div>
+    </article>`;
+}
+
+function adminPreviewCard(title, rows) {
+  if (!rows?.length) {
+    return `
+      <article class="available-card is-empty">
+        <div class="available-title"><span>${escapeHtml(title)}</span></div>
+        <span class="available-desc">Brak rekordĂłw do pokazania.</span>
+      </article>`;
+  }
+
+  return `
+    <article class="available-card">
+      <div class="available-title"><span>${escapeHtml(title)}</span></div>
+      <div class="admin-row-preview">
+        ${rows.map((row) => `<div class="admin-preview-entry">${Object.entries(row).map(([key, value]) => `<div><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</div>`).join("")}</div>`).join("")}
+      </div>
+    </article>`;
 }
 
 function sideViewItem(viewKey, title, description, state) {
